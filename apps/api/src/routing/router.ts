@@ -12,6 +12,7 @@ export interface RoutedResult {
   latencyMs: number;
   provider: string;
   fallbackUsed: boolean;
+  costPer1kTokens: number;
 }
 
 export class InferenceRouter {
@@ -43,6 +44,7 @@ export class InferenceRouter {
           latencyMs: result.latencyMs,
           provider: provider.name,
           fallbackUsed: index > 0,
+          costPer1kTokens: provider.costPer1kTokens,
         };
       } catch (err) {
         if (err instanceof ProviderError) {

@@ -2,7 +2,21 @@
 
 OpenAI-compatible inference API that routes requests through decentralized compute networks.
 
-## Phase 4 (current)
+## Phase 6 (current)
+
+- Internal credit balance per API key (USD)
+- Cost deducted per inference from provider token rates
+- `GET /v1/balance`, optional `POST /v1/credits/topup` (dev)
+- Demo UI shows balance, cost, and low-balance warnings
+
+## Phase 5
+
+- Neon Postgres storage for API keys + usage (`DATABASE_URL`)
+- Key management — `GET /v1/auth/keys`, `DELETE /v1/auth/key`
+- Chat rate limiting per API key
+- `GET /v1/models` — models from healthy providers
+
+## Phase 4
 
 - Usage tracking per API key — `GET /v1/usage`
 - Demo UI shows cumulative key usage after inference
@@ -38,7 +52,7 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 ```bash
 pnpm install
 cp .env.example .env
-# Edit .env — IONET_API_KEY required; AKASHML and TOGETHER optional
+# Edit .env — IONET_API_KEY required; DATABASE_URL recommended for Postgres storage
 pnpm dev
 ```
 
@@ -64,6 +78,7 @@ Provider status (no auth):
 
 ```powershell
 Invoke-RestMethod -Uri "http://localhost:3000/v1/status"
+Invoke-RestMethod -Uri "http://localhost:3000/v1/models"
 ```
 
 Generate an API key:
@@ -88,6 +103,24 @@ Usage for your key:
 
 ```powershell
 Invoke-RestMethod -Uri "http://localhost:3000/v1/usage" -Headers @{ Authorization = "Bearer $key" }
+```
+
+Credit balance:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/v1/balance" -Headers @{ Authorization = "Bearer $key" }
+```
+
+List keys (same email/wallet, or current key only):
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/v1/auth/keys" -Headers @{ Authorization = "Bearer $key" }
+```
+
+Revoke current key:
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/v1/auth/key" -Method DELETE -Headers @{ Authorization = "Bearer $key" }
 ```
 
 ## Fallback chain

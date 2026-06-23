@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { fetchStatus, fetchUsage, generateApiKey, sendChatCompletion } from "./api";
-import type { RequestLogEntry, RouteOption, StatusResponse, UsageResponse } from "./types";
+import { fetchBalance, fetchStatus, fetchUsage, generateApiKey, sendChatCompletion, topUpCredits } from "./api";
+import type { BalanceResponse, RequestLogEntry, RouteOption, StatusResponse, UsageResponse } from "./types";
 
 const GITHUB_URL = import.meta.env.VITE_GITHUB_URL ?? "";
 const DOCS_URL = import.meta.env.VITE_DOCS_URL ?? "";
@@ -29,6 +29,57 @@ function formatTime(date: Date): string {
 function formatIsoTime(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+function formatUsd(amount: number): string {
+  return `$${amount.toFixed(6)}`;
+}
+
+function BalancePanel({
+  balance,
+  loading,
+  onTopUp,
+  topUpLoading,
+}: {
+  balance: BalanceResponse | null;
+  loading?: boolean;
+  onTopUp?: () => void;
+  topUpLoading?: boolean;
+}) {
+  if (!balance && !loading) return null;
+
+  const low = balance != null && balance.balance < 0.01;
+
+  return (
+    <div className="mt-4 rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+          Credit Balance
+        </h3>
+        {onTopUp && (
+          <button
+            type="button"
+            onClick={onTopUp}
+            disabled={topUpLoading}
+            className="rounded border border-[var(--color-border)] px-2 py-1 text-[10px] text-[var(--color-muted)] transition hover:border-[var(--color-accent)] hover:text-white disabled:opacity-50"
+          >
+            {topUpLoading ? "…" : "+ $1.00"}
+          </button>
+        )}
+      </div>
+      {loading ? (
+        <p className="font-mono text-xs text-[var(--color-muted)] animate-pulse">Loading…</p>
+      ) : balance ? (
+        <p className={`font-mono text-lg ${low ? "text-[var(--color-warn)]" : "text-[var(--color-accent)]"}`}>
+          {formatUsd(balance.balance)}
+          <span className="ml-2 text-xs text-[var(--color-muted)]">{balance.currency}</span>
+        </p>
+      ) : null}
+      {low && balance && (
+        <p className="mt-1 text-xs text-[var(--color-warn)]">Low balance — top up or generate a new key</p>
+      )}
+    </div>
+  );
 }
 
 function UsagePanel({ usage, loading }: { usage: UsageResponse | null; loading?: boolean }) {
@@ -203,6 +254,8 @@ export default function App() {
     provider: string;
     fallback: boolean;
     latencyMs: number;
+    cost: number;
+    balance: number;
     promptTokens?: number;
     completionTokens?: number;
   } | null>(null);
@@ -210,6 +263,20 @@ export default function App() {
   const [requestLog, setRequestLog] = useState<RequestLogEntry[]>([]);
   const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [balance, setBalance] = useState<BalanceResponse | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
+  const [topUpLoading, setTopUpLoading] = useState(false);
+
+  const refreshBalance = useCallback(async (key: string) => {
+    setBalanceLoading(true);
+    try {
+      setBalance(await fetchBalance(key));
+    } catch {
+      setBalance(null);
+    } finally {
+      setBalanceLoading(false);
+    }
+  }, []);
 
   const refreshUsage = useCallback(async (key: string) => {
     setUsageLoading(true);
@@ -245,9 +312,16 @@ export default function App() {
     setKeyLoading(true);
     setKeyError(null);
     try {
-      const key = await generateApiKey(email || undefined);
+      const { apiKey: key, balance: initialBalance } = await generateApiKey(email || undefined);
       setApiKey(key);
+      setBalance({
+        object: "balance",
+        api_key_id: "",
+        balance: initialBalance,
+        currency: "USD",
+      });
       void refreshUsage(key);
+      void refreshBalance(key);
       try {
         await navigator.clipboard.writeText(key);
         setCopied(true);
@@ -267,6 +341,20 @@ export default function App() {
     await navigator.clipboard.writeText(apiKey);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleTopUp() {
+    if (!apiKey) return;
+    setTopUpLoading(true);
+    setKeyError(null);
+    try {
+      const result = await topUpCredits(apiKey, 1);
+      setBalance(result);
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : "Top-up failed");
+    } finally {
+      setTopUpLoading(false);
+    }
   }
 
   function pushLog(entry: Omit<RequestLogEntry, "id">) {
@@ -296,9 +384,21 @@ export default function App() {
         provider: headers.provider,
         fallback: headers.fallback,
         latencyMs: headers.latencyMs,
+        cost: headers.cost,
+        balance: headers.balance,
         promptTokens: response.usage?.prompt_tokens,
         completionTokens: response.usage?.completion_tokens,
       });
+      setBalance((prev) =>
+        prev
+          ? { ...prev, balance: headers.balance }
+          : {
+              object: "balance",
+              api_key_id: "",
+              balance: headers.balance,
+              currency: "USD",
+            },
+      );
       pushLog({
         time: new Date(),
         provider: headers.provider,
@@ -385,6 +485,15 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            )}
+
+            {apiKey && (
+              <BalancePanel
+                balance={balance}
+                loading={balanceLoading}
+                onTopUp={() => void handleTopUp()}
+                topUpLoading={topUpLoading}
+              />
             )}
 
             {apiKey && <UsagePanel usage={usage} loading={usageLoading} />}
@@ -475,6 +584,10 @@ export default function App() {
             </span>
             {"   "}Latency:{" "}
             <span className="text-[#e6edf3]">{responseMeta.latencyMs}ms</span>
+            {"   "}Cost:{" "}
+            <span className="text-[var(--color-warn)]">{formatUsd(responseMeta.cost)}</span>
+            {"   "}Balance:{" "}
+            <span className="text-[var(--color-accent)]">{formatUsd(responseMeta.balance)}</span>
           </p>
         )}
 

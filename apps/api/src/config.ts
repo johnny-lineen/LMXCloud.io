@@ -40,6 +40,14 @@ export interface Config {
 
   keyGenRateLimitWindowMs: number;
 
+  chatRateLimitMax: number;
+
+  chatRateLimitWindowMs: number;
+
+  initialCreditBalance: number;
+
+  minChatCost: number;
+
 }
 
 
@@ -118,8 +126,14 @@ export function loadConfig(): Config {
 
     keyGenRateLimitWindowMs: Number(process.env.KEY_GEN_RATE_LIMIT_WINDOW_MS ?? 3_600_000),
 
+    chatRateLimitMax: Number(process.env.CHAT_RATE_LIMIT_MAX ?? 60),
+
+    chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 60_000),
+
+    initialCreditBalance: Number(process.env.INITIAL_CREDIT_BALANCE ?? 1),
+
+    minChatCost: Number(process.env.MIN_CHAT_COST ?? 0.00001),
+
   };
 
 }
-
-

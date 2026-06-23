@@ -32,6 +32,8 @@ export interface LmxHeaders {
   provider: string;
   fallback: boolean;
   latencyMs: number;
+  cost: number;
+  balance: number;
 }
 
 export interface RequestLogEntry {
@@ -51,6 +53,13 @@ export interface UsageResponse {
   completion_tokens: number;
   total_tokens: number;
   last_request_at: string | null;
+}
+
+export interface BalanceResponse {
+  object: string;
+  api_key_id: string;
+  balance: number;
+  currency: string;
 }
 
 export type RouteOption =

@@ -15,6 +15,7 @@ export interface ProviderAdapter {
   readonly tier: number;
   readonly costPer1kTokens: number;
   readonly isDepin: boolean;
+  readonly aliases: string[];
   chatCompletion(request: ChatCompletionRequest): Promise<ProviderResult>;
   healthCheck(): Promise<ProviderHealthResult>;
 }

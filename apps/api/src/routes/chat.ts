@@ -1,14 +1,20 @@
 import type { FastifyInstance, preHandlerHookHandler } from "fastify";
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
 import { AllProvidersDownError, ProviderError } from "../providers/types.js";
+import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
+import type { CreditStore } from "../credits/store.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
 import type { InferenceRouter } from "../routing/router.js";
+import type { RateLimitResult } from "../rate-limit.js";
 import type { UsageStore } from "../usage/store.js";
 
 interface ChatRouteDeps {
   router: InferenceRouter;
   authenticate: preHandlerHookHandler;
   usageStore: UsageStore;
+  creditStore: CreditStore;
+  chatRateLimit: (key: string) => RateLimitResult;
+  minChatCost: number;
 }
 
 function isValidMessage(
@@ -74,6 +80,21 @@ export async function registerChatRoutes(
     "/v1/chat/completions",
     { preHandler: deps.authenticate },
     async (request, reply) => {
+      const apiKeyId = request.apiKey!.id;
+      const limit = deps.chatRateLimit(apiKeyId);
+
+      if (!limit.allowed) {
+        return reply
+          .status(429)
+          .header("Retry-After", String(limit.retryAfterSec ?? 60))
+          .send({
+            error: {
+              message: `Chat rate limit exceeded. Try again in ${limit.retryAfterSec}s.`,
+              type: "rate_limit_error",
+            },
+          });
+      }
+
       const validated = validateRequest(request.body);
 
       if (typeof validated === "string") {
@@ -82,17 +103,53 @@ export async function registerChatRoutes(
         });
       }
 
+      const hasCredits = await deps.creditStore.hasMinimumBalance(
+        apiKeyId,
+        deps.minChatCost,
+      );
+
+      if (!hasCredits) {
+        const balance = await deps.creditStore.getBalance(apiKeyId);
+        return reply.status(402).send({
+          error: {
+            message: `Insufficient credits. Balance: $${roundCredits(balance).toFixed(8)}. Top up to continue.`,
+            type: "insufficient_credits",
+            code: "insufficient_credits",
+          },
+        });
+      }
+
       const preference = parseRoutingPreference(headerValue(request.headers["x-lmx-prefer"]));
 
       try {
         const result = await deps.router.route(validated, preference);
 
+        const totalTokens = result.response.usage?.total_tokens ?? 0;
+        const requestCost = roundCredits(
+          calculateRequestCost(totalTokens, result.costPer1kTokens),
+        );
+
+        const deducted = await deps.creditStore.deduct(apiKeyId, requestCost);
+        if (!deducted && requestCost > 0) {
+          return reply.status(402).send({
+            error: {
+              message: "Insufficient credits to cover request cost",
+              type: "insufficient_credits",
+              code: "insufficient_credits",
+            },
+          });
+        }
+
+        const balance = await deps.creditStore.getBalance(apiKeyId);
+
         reply.header("x-lmx-provider", result.provider);
         reply.header("x-lmx-fallback", result.fallbackUsed ? "true" : "false");
         reply.header("x-lmx-latency", String(result.latencyMs));
+        reply.header("x-lmx-cost", String(requestCost));
+        reply.header("x-lmx-balance", String(roundCredits(balance)));
 
         void deps.usageStore.recordUsage({
-          apiKeyId: request.apiKey!.id,
+          apiKeyId,
           provider: result.provider,
           model: validated.model,
           promptTokens: result.response.usage?.prompt_tokens ?? 0,
@@ -137,4 +194,3 @@ export async function registerChatRoutes(
     },
   );
 }
-

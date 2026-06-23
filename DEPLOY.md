@@ -43,6 +43,7 @@ git push -u origin main
    |----------|----------|---------|
    | `IONET_API_KEY` | Yes | `io-...` |
    | `AKASHML_API_KEY` | Recommended | `akml-...` |
+   | `DATABASE_URL` | Recommended | Neon pooled connection string |
    | `PORT` | Auto-set by Railway | (leave default) |
    | `HOST` | No | `0.0.0.0` |
    | `KEY_GEN_RATE_LIMIT_MAX` | No | `10` |
@@ -53,10 +54,12 @@ git push -u origin main
 
 ### Persist API keys (recommended)
 
-Without a volume, keys reset on every deploy.
+With `DATABASE_URL` (Neon Postgres), keys and usage persist automatically — no volume required.
+
+For file-based storage without Postgres:
 
 1. Railway → your service → **Volumes** → Add volume, mount path `/data`
-2. Set variable: `API_KEYS_FILE=/data/api-keys.json`
+2. Set variables: `API_KEYS_FILE=/data/api-keys.json` and `USAGE_FILE=/data/usage.json`
 
 ### Verify API
 

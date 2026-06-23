@@ -1,5 +1,6 @@
 import type {
   ApiError,
+  BalanceResponse,
   ChatCompletionResponse,
   LmxHeaders,
   StatusResponse,
@@ -23,7 +24,9 @@ export async function fetchStatus(): Promise<StatusResponse> {
   return res.json() as Promise<StatusResponse>;
 }
 
-export async function generateApiKey(email?: string): Promise<string> {
+export async function generateApiKey(
+  email?: string,
+): Promise<{ apiKey: string; balance: number }> {
   const body = email?.trim() ? { email: email.trim() } : {};
   const res = await fetch(`${API_BASE}/v1/auth/key`, {
     method: "POST",
@@ -31,8 +34,8 @@ export async function generateApiKey(email?: string): Promise<string> {
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(await parseError(res));
-  const data = (await res.json()) as { api_key: string };
-  return data.api_key;
+  const data = (await res.json()) as { api_key: string; balance: number };
+  return { apiKey: data.api_key, balance: data.balance };
 }
 
 export async function sendChatCompletion(
@@ -67,8 +70,31 @@ export async function sendChatCompletion(
       provider: res.headers.get("x-lmx-provider") ?? "unknown",
       fallback: res.headers.get("x-lmx-fallback") === "true",
       latencyMs: Number(res.headers.get("x-lmx-latency") ?? 0),
+      cost: Number(res.headers.get("x-lmx-cost") ?? 0),
+      balance: Number(res.headers.get("x-lmx-balance") ?? 0),
     },
   };
+}
+
+export async function fetchBalance(apiKey: string): Promise<BalanceResponse> {
+  const res = await fetch(`${API_BASE}/v1/balance`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<BalanceResponse>;
+}
+
+export async function topUpCredits(apiKey: string, amount: number): Promise<BalanceResponse> {
+  const res = await fetch(`${API_BASE}/v1/credits/topup`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ amount }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<BalanceResponse>;
 }
 
 export async function fetchUsage(apiKey: string): Promise<UsageResponse> {

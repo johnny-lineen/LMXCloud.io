@@ -1,0 +1,26 @@
+import pg from "pg";
+
+let pool: pg.Pool | null = null;
+
+export function getPool(): pg.Pool {
+  if (pool) return pool;
+
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required for Postgres storage");
+  }
+
+  pool = new pg.Pool({
+    connectionString,
+    ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
+  });
+
+  return pool;
+}
+
+export async function closePool(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
+}

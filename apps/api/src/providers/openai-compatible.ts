@@ -9,6 +9,7 @@ export interface OpenAiCompatibleConfig {
   apiKey: string;
   baseUrl: string;
   resolveModel: (model: string) => string;
+  aliases: string[];
   timeoutMs?: number;
 }
 
@@ -20,6 +21,7 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
     tier: config.tier,
     costPer1kTokens: config.costPer1kTokens,
     isDepin: config.isDepin,
+    aliases: config.aliases,
 
     async healthCheck(): Promise<ProviderHealthResult> {
       const start = performance.now();

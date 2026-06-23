@@ -10,6 +10,7 @@ export interface ApiKeyRecord {
   wallet?: string;
   createdAt: string;
   lastUsedAt?: string;
+  revokedAt?: string;
 }
 
 export interface CreateApiKeyInput {
@@ -21,6 +22,8 @@ export interface ApiKeyStore {
   create(input: CreateApiKeyInput): Promise<{ record: ApiKeyRecord; plainKey: string }>;
   findByPlainKey(plainKey: string): Promise<ApiKeyRecord | null>;
   touchLastUsed(id: string): Promise<void>;
+  listForRecord(record: ApiKeyRecord): Promise<ApiKeyRecord[]>;
+  revoke(id: string, owner: ApiKeyRecord): Promise<boolean>;
 }
 
 export class FileApiKeyStore implements ApiKeyStore {
@@ -71,15 +74,55 @@ export class FileApiKeyStore implements ApiKeyStore {
   async findByPlainKey(plainKey: string): Promise<ApiKeyRecord | null> {
     await this.ensureLoaded();
     const keyHash = hashApiKey(plainKey);
-    return this.records.find((record) => record.keyHash === keyHash) ?? null;
+    const record = this.records.find(
+      (entry) => entry.keyHash === keyHash && !entry.revokedAt,
+    );
+    return record ?? null;
   }
 
   async touchLastUsed(id: string): Promise<void> {
     await this.ensureLoaded();
     const record = this.records.find((entry) => entry.id === id);
-    if (!record) return;
+    if (!record || record.revokedAt) return;
 
     record.lastUsedAt = new Date().toISOString();
     await this.persist();
+  }
+
+  async listForRecord(record: ApiKeyRecord): Promise<ApiKeyRecord[]> {
+    await this.ensureLoaded();
+    const active = this.records.filter((entry) => !entry.revokedAt);
+
+    if (record.email) {
+      return active
+        .filter((entry) => entry.email === record.email)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+
+    if (record.wallet) {
+      return active
+        .filter((entry) => entry.wallet === record.wallet)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+
+    const current = active.find((entry) => entry.id === record.id);
+    return current ? [current] : [];
+  }
+
+  async revoke(id: string, owner: ApiKeyRecord): Promise<boolean> {
+    await this.ensureLoaded();
+    const allowed = await this.listForRecord(owner);
+    if (!allowed.some((entry) => entry.id === id)) {
+      return false;
+    }
+
+    const record = this.records.find((entry) => entry.id === id);
+    if (!record || record.revokedAt) {
+      return false;
+    }
+
+    record.revokedAt = new Date().toISOString();
+    await this.persist();
+    return true;
   }
 }

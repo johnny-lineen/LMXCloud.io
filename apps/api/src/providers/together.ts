@@ -12,6 +12,8 @@ export interface TogetherConfig {
   baseUrl: string;
 }
 
+const ALIASES = [...new Set(Object.keys(MODEL_MAP))];
+
 export function createTogetherAdapter(config: TogetherConfig) {
   return createOpenAiCompatibleAdapter({
     name: "together",
@@ -21,5 +23,6 @@ export function createTogetherAdapter(config: TogetherConfig) {
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
     resolveModel: (model) => MODEL_MAP[model] ?? model,
+    aliases: ALIASES,
   });
 }

@@ -43,11 +43,13 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `DATABASE_URL` | Yes | Neon pooled connection string |
    | `CLERK_SECRET_KEY` | Yes | Clerk → API keys → Secret key |
    | `SESSION_SECRET` | Yes | Random 32+ char string (e.g. `openssl rand -hex 32`) |
+   | `SENTRY_DSN` | No | Sentry project DSN for API error reporting |
    | `HOST` | No | `0.0.0.0` (default) |
    | `INITIAL_CREDIT_BALANCE` | No | `1` |
    | `CREDITS_ALLOW_SELF_TOPUP` | No | `false` in production |
-   | `KEY_GEN_RATE_LIMIT_MAX` | No | `10` |
+   | `KEY_GEN_RATE_LIMIT_MAX` | No | `5` (conservative free-beta default) |
    | `KEY_GEN_RATE_LIMIT_WINDOW_MS` | No | `3600000` |
+   | `CHAT_RATE_LIMIT_MAX` | No | `30` (conservative free-beta default) |
 
    Do **not** set `PORT` — Railway injects it automatically.
 

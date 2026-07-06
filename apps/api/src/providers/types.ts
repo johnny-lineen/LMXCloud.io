@@ -1,8 +1,14 @@
-import type { ChatCompletionRequest, ChatCompletionResponse } from "@lmxcloud/shared";
+import type {
+  ChatCompletionRequest,
+  ChatCompletionResponse,
+  UsageInfo,
+} from "@lmxcloud/shared";
 
 export interface ProviderResult {
   response: ChatCompletionResponse;
   latencyMs: number;
+  usage: UsageInfo | null;
+  stream?: AsyncIterable<string>;
 }
 
 export interface ProviderHealthResult {

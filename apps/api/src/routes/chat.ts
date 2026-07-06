@@ -1,5 +1,6 @@
 import type { FastifyInstance, preHandlerHookHandler } from "fastify";
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
+import * as Sentry from "@sentry/node";
 import { AllProvidersDownError, ProviderError } from "../providers/types.js";
 import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
@@ -50,10 +51,6 @@ function validateRequest(body: unknown): ChatCompletionRequest | string {
     }
   }
 
-  if (b.stream === true) {
-    return "Streaming is not supported in MVP v1.0. Set stream to false or omit it.";
-  }
-
   return {
     model: b.model,
     messages: b.messages,
@@ -63,13 +60,45 @@ function validateRequest(body: unknown): ChatCompletionRequest | string {
       typeof b.max_completion_tokens === "number"
         ? b.max_completion_tokens
         : undefined,
-    stream: false,
+    stream: b.stream === true,
   };
 }
 
 function headerValue(value: string | string[] | undefined): string | undefined {
   if (Array.isArray(value)) return value[0];
   return value;
+}
+
+function extractUsageFromSseChunk(chunk: string): {
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+} | null {
+  const frames = chunk.split("\n\n");
+  for (const frame of frames) {
+    const lines = frame
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("data:"));
+
+    for (const line of lines) {
+      const raw = line.slice(5).trim();
+      if (!raw || raw === "[DONE]") continue;
+      try {
+        const data = JSON.parse(raw) as {
+          usage?: {
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+          };
+        };
+        if (data.usage) return data.usage;
+      } catch {
+        // Ignore malformed vendor chunks; upstream stream continues.
+      }
+    }
+  }
+  return null;
 }
 
 export async function registerChatRoutes(
@@ -124,7 +153,91 @@ export async function registerChatRoutes(
       try {
         const result = await deps.router.route(validated, preference);
 
-        const totalTokens = result.response.usage?.total_tokens ?? 0;
+        if (validated.stream) {
+          if (!result.stream) {
+            throw new ProviderError(
+              `Provider ${result.provider} did not return a stream`,
+              result.provider,
+            );
+          }
+
+          reply.hijack();
+          reply.raw.statusCode = 200;
+          reply.raw.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+          reply.raw.setHeader("Cache-Control", "no-cache, no-transform");
+          reply.raw.setHeader("Connection", "keep-alive");
+          reply.raw.setHeader("x-lmx-provider", result.provider);
+          reply.raw.setHeader("x-lmx-fallback", result.fallbackUsed ? "true" : "false");
+          reply.raw.setHeader("x-lmx-latency", String(result.latencyMs));
+
+          let usage = result.usage ?? result.response.usage ?? null;
+          try {
+            for await (const chunk of result.stream) {
+              const parsedUsage = extractUsageFromSseChunk(chunk);
+              if (parsedUsage) usage = parsedUsage;
+              reply.raw.write(chunk);
+            }
+
+            const promptTokens = usage?.prompt_tokens ?? 0;
+            const completionTokens = usage?.completion_tokens ?? 0;
+            const totalTokens = usage?.total_tokens ?? 0;
+            const requestCost = roundCredits(
+              calculateRequestCost(totalTokens, result.costPer1kTokens),
+            );
+
+            const deducted = await deps.creditStore.deduct(apiKeyId, requestCost);
+            if (!deducted && requestCost > 0) {
+              reply.raw.write(
+                `event: lmx.error\ndata: ${JSON.stringify({
+                  message: "Insufficient credits to cover streamed request cost",
+                  type: "insufficient_credits",
+                  code: "insufficient_credits",
+                })}\n\n`,
+              );
+            }
+
+            const balance = await deps.creditStore.getBalance(apiKeyId);
+            reply.raw.write(
+              `event: lmx.meta\ndata: ${JSON.stringify({
+                provider: result.provider,
+                fallback: result.fallbackUsed,
+                latencyMs: result.latencyMs,
+                cost: requestCost,
+                balance: roundCredits(balance),
+                usage: usage ?? {
+                  prompt_tokens: 0,
+                  completion_tokens: 0,
+                  total_tokens: 0,
+                },
+              })}\n\n`,
+            );
+
+            void deps.usageStore.recordUsage({
+              apiKeyId,
+              provider: result.provider,
+              model: validated.model,
+              promptTokens,
+              completionTokens,
+              latencyMs: result.latencyMs,
+              fallbackUsed: result.fallbackUsed,
+              cost: requestCost,
+            });
+          } catch (streamErr) {
+            request.log.error({ err: streamErr }, "Streaming response failed");
+            reply.raw.write(
+              `event: lmx.error\ndata: ${JSON.stringify({
+                message: "Streaming interrupted",
+                type: "stream_error",
+              })}\n\n`,
+            );
+          } finally {
+            reply.raw.end();
+          }
+          return;
+        }
+
+        const usage = result.usage ?? result.response.usage ?? null;
+        const totalTokens = usage?.total_tokens ?? 0;
         const requestCost = roundCredits(
           calculateRequestCost(totalTokens, result.costPer1kTokens),
         );
@@ -152,8 +265,8 @@ export async function registerChatRoutes(
           apiKeyId,
           provider: result.provider,
           model: validated.model,
-          promptTokens: result.response.usage?.prompt_tokens ?? 0,
-          completionTokens: result.response.usage?.completion_tokens ?? 0,
+          promptTokens: usage?.prompt_tokens ?? 0,
+          completionTokens: usage?.completion_tokens ?? 0,
           latencyMs: result.latencyMs,
           fallbackUsed: result.fallbackUsed,
           cost: requestCost,
@@ -173,7 +286,9 @@ export async function registerChatRoutes(
 
         if (err instanceof ProviderError) {
           request.log.error({ err, provider: err.provider }, "Provider request failed");
-
+          if (process.env.SENTRY_DSN) {
+            Sentry.captureException(err);
+          }
           const status = err.statusCode === 429 ? 429 : err.statusCode === 401 ? 502 : 504;
           return reply.status(status).send({
             error: {
@@ -185,6 +300,9 @@ export async function registerChatRoutes(
         }
 
         request.log.error({ err }, "Unexpected error during chat completion");
+        if (process.env.SENTRY_DSN) {
+          Sentry.captureException(err);
+        }
         return reply.status(500).send({
           error: {
             message: "Internal server error",

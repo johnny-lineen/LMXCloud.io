@@ -13,6 +13,7 @@
     "@clerk/backend": "^3.10.0",
     "@fastify/cors": "^11.0.1",
     "@lmxcloud/shared": "workspace:*",
+    "@sentry/node": "^10.63.0",
     "dotenv": "^16.5.0",
     "fastify": "^5.3.3",
     "pg": "^8.22.0"

@@ -13,6 +13,8 @@ export interface RoutedResult {
   provider: string;
   fallbackUsed: boolean;
   costPer1kTokens: number;
+  usage: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["usage"];
+  stream?: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["stream"];
 }
 
 export class InferenceRouter {
@@ -45,6 +47,8 @@ export class InferenceRouter {
           provider: provider.name,
           fallbackUsed: index > 0,
           costPer1kTokens: provider.costPer1kTokens,
+          usage: result.usage,
+          stream: result.stream,
         };
       } catch (err) {
         if (err instanceof ProviderError) {

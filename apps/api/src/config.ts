@@ -107,46 +107,26 @@ function optionalProvider(prefix: string): ProviderConfig | undefined {
 
 
 export function loadConfig(): Config {
-
   return {
-
     port: Number(process.env.PORT ?? 3000),
-
     host: process.env.HOST ?? "0.0.0.0",
-
     healthPollIntervalMs: Number(process.env.HEALTH_POLL_INTERVAL_MS ?? 30_000),
-
     ionet: {
-
       apiKey: requireEnv("IONET_API_KEY"),
-
       baseUrl: process.env.IONET_BASE_URL ?? "https://api.intelligence.io.solutions/api/v1",
-
     },
-
     akash: optionalProvider("AKASHML"),
-
     together: optionalProvider("TOGETHER"),
-
-    keyGenRateLimitMax: Number(process.env.KEY_GEN_RATE_LIMIT_MAX ?? 10),
-
+    // Conservative default rate limit for key generation during free beta; can be loosened after monitoring abuse patterns.
+    keyGenRateLimitMax: Number(process.env.KEY_GEN_RATE_LIMIT_MAX ?? 5),
     keyGenRateLimitWindowMs: Number(process.env.KEY_GEN_RATE_LIMIT_WINDOW_MS ?? 3_600_000),
-
-    chatRateLimitMax: Number(process.env.CHAT_RATE_LIMIT_MAX ?? 60),
-
+    // Conservative default rate limit for chat completions during free beta; can be loosened after monitoring abuse patterns.
+    chatRateLimitMax: Number(process.env.CHAT_RATE_LIMIT_MAX ?? 30),
     chatRateLimitWindowMs: Number(process.env.CHAT_RATE_LIMIT_WINDOW_MS ?? 60_000),
-
     initialCreditBalance: Number(process.env.INITIAL_CREDIT_BALANCE ?? 1),
-
     minChatCost: Number(process.env.MIN_CHAT_COST ?? 0.00001),
-
-    sessionSecret:
-      process.env.SESSION_SECRET ?? "lmxcloud-dev-session-secret-change-me",
-
+    sessionSecret: requireEnv("SESSION_SECRET"),
     sessionTtlMs: Number(process.env.SESSION_TTL_MS ?? 30 * 24 * 60 * 60 * 1000),
-
     clerkSecretKey: process.env.CLERK_SECRET_KEY,
-
   };
-
 }

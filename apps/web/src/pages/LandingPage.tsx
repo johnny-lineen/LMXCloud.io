@@ -116,11 +116,13 @@ export function LandingPage() {
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">
-            {[
-              { href: "#features", label: "Features" },
-              { href: "#how-it-works", label: "How it works" },
-              { href: "#try-chat", label: "Live demo" },
-            ].map((item) => (
+            {(
+              [
+                { href: "#features", label: "Features" },
+                { href: "#how-it-works", label: "How it works" },
+                { href: "#try-chat", label: "Live demo" },
+              ] as const
+            ).map((item) => (
               <a
                 key={item.href}
                 href={item.href}
@@ -128,6 +130,20 @@ export function LandingPage() {
               >
                 {item.label}
               </a>
+            ))}
+            {(
+              [
+                { to: "/docs", label: "Docs" },
+                { to: "/status", label: "Status" },
+              ] as const
+            ).map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="rounded-md px-3 py-2 text-body-sm text-on-surface-muted transition-colors duration-base ease-standard hover:bg-surface hover:text-on-surface"
+              >
+                {item.label}
+              </Link>
             ))}
           </nav>
 
@@ -259,8 +275,8 @@ export function LandingPage() {
                     ),
                   )}
                 </ul>
-                <Button to="/sign-up" className="mt-8">
-                  Get your API key
+                <Button to="/docs" variant="secondary" className="mt-8">
+                  Read the docs
                 </Button>
               </div>
               <Card variant="elevated" className="overflow-hidden p-0">
@@ -352,6 +368,12 @@ export function LandingPage() {
             <a href="#try-chat" className="hover:text-on-surface">
               Live demo
             </a>
+            <Link to="/docs" className="hover:text-on-surface">
+              Docs
+            </Link>
+            <Link to="/status" className="hover:text-on-surface">
+              Status
+            </Link>
             <Link to="/sign-up" className="hover:text-on-surface">
               Console
             </Link>

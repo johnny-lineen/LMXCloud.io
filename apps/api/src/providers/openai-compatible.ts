@@ -51,8 +51,12 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
       const body: Record<string, unknown> = {
         model: upstreamModel,
         messages: request.messages,
-        stream: false,
+        stream: request.stream === true,
       };
+
+      if (request.stream === true) {
+        body.stream_options = { include_usage: true };
+      }
 
       if (request.temperature !== undefined) {
         body.temperature = request.temperature;
@@ -95,11 +99,124 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
         );
       }
 
+      if (request.stream === true) {
+        const parsed = parseProviderStream(response.body, config.name, upstreamModel);
+        return {
+          response: parsed.response,
+          latencyMs,
+          usage: parsed.usage,
+          stream: parsed.stream,
+        };
+      }
+
       const data = (await response.json()) as Awaited<
         ReturnType<ProviderAdapter["chatCompletion"]>
       >["response"];
 
-      return { response: data, latencyMs };
+      return {
+        response: data,
+        latencyMs,
+        usage: data.usage ?? null,
+      };
     },
   };
+}
+
+function parseProviderStream(
+  body: ReadableStream<Uint8Array> | null,
+  providerName: string,
+  upstreamModel: string,
+): {
+  response: Awaited<ReturnType<ProviderAdapter["chatCompletion"]>>["response"];
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number } | null;
+  stream: AsyncIterable<string>;
+} {
+  if (!body) {
+    throw new ProviderError("Provider returned empty stream body", providerName);
+  }
+  const streamBody = body;
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let done = false;
+
+  async function* stream(): AsyncIterable<string> {
+    for await (const chunk of iterateStreamChunks(streamBody, decoder)) {
+      buffer += chunk;
+
+      let boundary = buffer.indexOf("\n\n");
+      while (boundary >= 0) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+
+        const lines = frame
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith("data:"));
+
+        for (const line of lines) {
+          const data = line.slice(5).trim();
+          if (!data) continue;
+          if (data === "[DONE]") {
+            done = true;
+            yield "data: [DONE]\n\n";
+            continue;
+          }
+
+          const parsed = JSON.parse(data) as {
+            [key: string]: unknown;
+          };
+
+          yield `data: ${JSON.stringify(parsed)}\n\n`;
+        }
+
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+
+    if (!done) {
+      yield "data: [DONE]\n\n";
+    }
+  }
+
+  return {
+    usage: null,
+    stream: stream(),
+    response: {
+      id: "chatcmpl_streaming_placeholder",
+      object: "chat.completion",
+      created: Math.floor(Date.now() / 1000),
+      model: upstreamModel,
+      choices: [
+        {
+          index: 0,
+          finish_reason: "stop",
+          message: {
+            role: "assistant",
+            content: "",
+          },
+        },
+      ],
+    },
+  };
+}
+
+async function* iterateStreamChunks(
+  stream: ReadableStream<Uint8Array>,
+  decoder: TextDecoder,
+): AsyncIterable<string> {
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        yield decoder.decode(value, { stream: true });
+      }
+    }
+    const tail = decoder.decode();
+    if (tail) yield tail;
+  } finally {
+    reader.releaseLock();
+  }
 }

@@ -94,54 +94,34 @@ Open [http://localhost:5173](http://localhost:5173) — redirects to sign in or 
 
 ## Test
 
-Provider status (no auth):
+**API docs:** [http://localhost:5173/docs](http://localhost:5173/docs) — quickstart (curl, Python, JavaScript), model list, routing headers, and streaming.
 
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/v1/status"
-Invoke-RestMethod -Uri "http://localhost:3000/v1/models"
+**Provider status:** [http://localhost:5173/status](http://localhost:5173/status) — live health from `GET /v1/status` (no auth).
+
+Quick smoke test:
+
+```bash
+curl http://localhost:3000/v1/status
+curl http://localhost:3000/v1/models
 ```
 
-Generate an API key:
+Generate an API key and send a chat completion:
 
-```powershell
-$key = (Invoke-RestMethod -Uri "http://localhost:3000/v1/auth/key" -Method POST -ContentType "application/json" -Body '{"email":"you@example.com"}').api_key
+```bash
+KEY=$(curl -s -X POST http://localhost:3000/v1/auth/key \
+  -H "Content-Type: application/json" \
+  -d '{"email":"you@example.com"}' | jq -r .api_key)
+
+curl http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer $KEY" \
+  -H "x-lmx-prefer: cheapest" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama-3-70b","messages":[{"role":"user","content":"Hello from LMX Cloud"}]}'
 ```
 
-Chat with routing preference:
+Response headers: `x-lmx-provider`, `x-lmx-fallback`, `x-lmx-latency`, `x-lmx-cost`, `x-lmx-balance`.
 
-```powershell
-$headers = @{
-  Authorization = "Bearer $key"
-  "x-lmx-prefer" = "cheapest"
-}
-Invoke-RestMethod -Uri "http://localhost:3000/v1/chat/completions" -Method POST -ContentType "application/json" -Headers $headers -Body '{"model":"llama-3-70b","messages":[{"role":"user","content":"Hello from LMX Cloud"}]}'
-```
-
-Response headers: `x-lmx-provider`, `x-lmx-fallback`, `x-lmx-latency`.
-
-Usage for your key:
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/v1/usage" -Headers @{ Authorization = "Bearer $key" }
-```
-
-Credit balance:
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/v1/balance" -Headers @{ Authorization = "Bearer $key" }
-```
-
-List keys (same email/wallet, or current key only):
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/v1/auth/keys" -Headers @{ Authorization = "Bearer $key" }
-```
-
-Revoke current key:
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:3000/v1/auth/key" -Method DELETE -Headers @{ Authorization = "Bearer $key" }
-```
+Authenticated endpoints (usage, balance, keys) use the same `Authorization: Bearer lmx_...` header — see the docs page for full reference.
 
 ## Fallback chain
 

@@ -4,7 +4,9 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { BillingPage } from "./pages/BillingPage";
 import { KeysPage } from "./pages/KeysPage";
+import { DocsPage } from "./pages/DocsPage";
 import { LandingPage } from "./pages/LandingPage";
+import { StatusPage } from "./pages/StatusPage";
 import { LogsPage } from "./pages/LogsPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SignInPage } from "./pages/SignInPage";
@@ -34,6 +36,8 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
+      <Route path="/status" element={<StatusPage />} />
+      <Route path="/docs" element={<DocsPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
       <Route
         path="/sign-in/*"

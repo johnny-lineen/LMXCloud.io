@@ -1,27 +1,16 @@
 import Fastify from "fastify";
-
 import cors from "@fastify/cors";
-
+import * as Sentry from "@sentry/node";
 import { createApiKeyStore, createAuthHook } from "./auth/index.js";
-
 import { loadConfig } from "./config.js";
-
 import { closePool } from "./db/pool.js";
-
 import { HealthMonitor } from "./health/monitor.js";
-
 import { InMemoryHealthStore } from "./health/store.js";
-
 import { createProviderRegistry, getFallbackChain } from "./providers/registry.js";
-
 import { InferenceRouter } from "./routing/router.js";
-
 import { registerAuthRoutes } from "./routes/auth.js";
-
 import { registerChatRoutes } from "./routes/chat.js";
-
 import { registerModelsRoutes } from "./routes/models.js";
-
 import { registerStatusRoutes } from "./routes/status.js";
 import { registerUsageRoutes } from "./routes/usage.js";
 import { registerBalanceRoutes } from "./routes/balance.js";
@@ -47,6 +36,19 @@ export async function buildServer() {
 
   });
 
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      integrations: [
+        Sentry.profilingIntegration(),
+      ],
+      tracesSampleRate: 0.1,
+      profilesSampleRate: 0.1,
+    });
+  } else {
+    app.log.warn("SENTRY_DSN is not set — errors will not be reported to Sentry");
+  }
+
   if (!config.clerkSecretKey) {
     app.log.warn("CLERK_SECRET_KEY is not set — POST /v1/auth/clerk will return 503");
   }
@@ -65,6 +67,21 @@ export async function buildServer() {
       "x-lmx-balance",
     ],
 
+  });
+
+  app.setErrorHandler((error, request, reply) => {
+    if (process.env.SENTRY_DSN) {
+      Sentry.captureException(error);
+    }
+    request.log.error({ err: error }, "Unhandled error");
+    if (!reply.sent) {
+      void reply.status(500).send({
+        error: {
+          message: "Internal server error",
+          type: "internal_error",
+        },
+      });
+    }
   });
 
 

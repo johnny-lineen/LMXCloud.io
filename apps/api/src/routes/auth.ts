@@ -20,10 +20,6 @@ interface AuthRouteDeps {
   clerkSecretKey?: string;
 }
 
-interface LoginBody {
-  email: string;
-}
-
 interface CreateKeyBody {
   email?: string;
   wallet?: string;
@@ -81,19 +77,6 @@ function validateRevokeKeyBody(body: unknown): RevokeKeyBody | string {
   }
 
   return { id: b.id.trim() };
-}
-
-function validateLoginBody(body: unknown): LoginBody | string {
-  if (body === undefined || body === null || typeof body !== "object") {
-    return "Request body must be a JSON object with email";
-  }
-
-  const b = body as Record<string, unknown>;
-  if (typeof b.email !== "string" || b.email.trim() === "") {
-    return "Field 'email' is required";
-  }
-
-  return { email: b.email.trim() };
 }
 
 function serializeKey(record: {
@@ -191,39 +174,6 @@ export async function registerAuthRoutes(
       email: clerkUser.email,
       api_key_id: record.id,
       created_account: createdAccount,
-    });
-  });
-
-  app.post<{ Body: unknown }>("/v1/auth/login", async (request, reply) => {
-    const validated = validateLoginBody(request.body);
-    if (typeof validated === "string") {
-      return reply.status(400).send({
-        error: { message: validated, type: "invalid_request_error" },
-      });
-    }
-
-    const record = await deps.store.findPrimaryKeyForEmail(validated.email);
-    if (!record) {
-      return reply.status(404).send({
-        error: {
-          message: "No account found for this email. Sign up first.",
-          type: "authentication_error",
-        },
-      });
-    }
-
-    const sessionToken = createSessionToken(
-      record.id,
-      validated.email,
-      deps.sessionSecret,
-      deps.sessionTtlMs,
-    );
-
-    return reply.status(200).send({
-      object: "session",
-      session_token: sessionToken,
-      email: validated.email,
-      api_key_id: record.id,
     });
   });
 

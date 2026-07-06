@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createApiKey, sendChatCompletion, type ChatMessage } from "../api";
+import { createApiKey, streamChatCompletion, type ChatMessage } from "../api";
 import { clearDemoApiKey, readDemoApiKey, writeDemoApiKey } from "../lib/demo-storage";
 import {
   estimateOpenAiCost,
@@ -106,30 +106,63 @@ export function LandingChat() {
     setSending(true);
 
     try {
-      const { response, headers } = await sendChatCompletion(apiKey, DEFAULT_MODEL, nextHistory);
-      const content = response.choices[0]?.message?.content ?? "(empty response)";
-      const promptTokens = response.usage?.prompt_tokens ?? 0;
-      const completionTokens = response.usage?.completion_tokens ?? 0;
-      const openAiCost = estimateOpenAiCost(promptTokens, completionTokens, DEFAULT_MODEL);
-      const bench = getOpenAiBenchmark(DEFAULT_MODEL);
+      const streamEntryId = crypto.randomUUID();
+      let assistantContent = "";
 
-      setHistory((prev) => [...prev, { role: "assistant", content }]);
       setEntries((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: streamEntryId,
           role: "assistant",
-          content,
-          meta: {
-            model: DEFAULT_MODEL,
-            provider: headers.provider,
-            latencyMs: headers.latencyMs,
-            cost: headers.cost,
-            openAiCost,
-            savingsPercent: savingsVsOpenAi(headers.cost, openAiCost),
-            openAiLabel: bench.label,
-          },
+          content: "",
         },
+      ]);
+
+      await streamChatCompletion(apiKey, DEFAULT_MODEL, nextHistory, {
+        onToken: (token) => {
+          assistantContent += token;
+          setEntries((prev) =>
+            prev.map((entry) =>
+              entry.id === streamEntryId
+                ? {
+                    ...entry,
+                    content: assistantContent,
+                  }
+                : entry,
+            ),
+          );
+        },
+        onMeta: (meta) => {
+          const promptTokens = meta.usage.prompt_tokens;
+          const completionTokens = meta.usage.completion_tokens;
+          const openAiCost = estimateOpenAiCost(promptTokens, completionTokens, DEFAULT_MODEL);
+          const bench = getOpenAiBenchmark(DEFAULT_MODEL);
+
+          setEntries((prev) =>
+            prev.map((entry) =>
+              entry.id === streamEntryId
+                ? {
+                    ...entry,
+                    content: assistantContent || "(empty response)",
+                    meta: {
+                      model: DEFAULT_MODEL,
+                      provider: meta.provider,
+                      latencyMs: meta.latencyMs,
+                      cost: meta.cost,
+                      openAiCost,
+                      savingsPercent: savingsVsOpenAi(meta.cost, openAiCost),
+                      openAiLabel: bench.label,
+                    },
+                  }
+                : entry,
+            ),
+          );
+        },
+      });
+
+      setHistory((prev) => [
+        ...prev,
+        { role: "assistant", content: assistantContent || "(empty response)" },
       ]);
     } catch (err) {
       setHistory(nextHistory.slice(0, -1));

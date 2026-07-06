@@ -8,12 +8,12 @@ The core is real: multi-provider routing with fallback, health monitoring, per-k
 
 Two things found in the audit that should jump the queue:
 
-1. ~~**Login is email-only, no verification.**~~ **RESOLVED (2026-07-05):** Auth migrated to Clerk (`@clerk/clerk-react`) — email verification is handled by Clerk, not custom code. `SignInPage`/`SignUpPage`/`AuthContext` gate on `clerkSignedIn`. Worth double-checking the API actually verifies Clerk sessions server-side, not just the frontend.
-2. ~~**Nothing is deployed yet.**~~ **RESOLVED (2026-07-05):** Deployed.
+1. **CORRECTION (2026-07-05): the login gap is NOT resolved — it's live on production right now.** The dashboard frontend did migrate to Clerk (`SignInPage`/`SignUpPage` use Clerk's hosted components, `AuthContext` exchanges a Clerk token via `POST /v1/auth/clerk`) — but the old `POST /v1/auth/login` route in `apps/api/src/routes/auth.ts` was never removed. It's still registered unconditionally in `server.ts` and still issues a valid session token to anyone who POSTs an email address with an existing account — zero password/OTP/verification. Nothing in the frontend calls it anymore, but the API route doesn't know that: anyone with curl can hit it directly against your deployed Railway URL right now and take over any account by email alone. **This is a live account-takeover vector on a deployed product, not a theoretical one.** Fix: delete the `/v1/auth/login` handler entirely (Clerk fully replaced it, so it's pure attack surface with no remaining legitimate use) rather than trying to patch it.
+2. **Deploy:** done.
 
 ## Week 1 — Deploy for real, close the security gap
 
-- **Fix login.** Cheapest correct option for a free beta: passwordless magic-link email (send a signed, short-lived link instead of trusting a bare email string). Alternative if you want to ship faster: require the original API key as a second factor to establish a session, and clearly label the dashboard as "share your API key with no one." Pick one — don't ship the current version to outsiders.
+- **Delete `POST /v1/auth/login`.** Clerk already fully replaced it — the frontend never calls it. It's dead code that happens to be a live account-takeover endpoint on the deployed API. Remove the route handler and its registration in `server.ts`; this is a deletion, not a rebuild. (Previously scoped as "build magic-link auth" — unnecessary now that Clerk covers this.)
 - **Rotate `SESSION_SECRET`** off the `change-me-in-production` default before deploying anywhere.
 - **Deploy API to Railway, dashboard + demo to Vercel**, following DEPLOY.md. Confirm `DATABASE_URL` (Neon) is set so keys/usage persist across restarts — don't launch on file storage.
 - **Add error monitoring** (Sentry free tier is enough) and a **basic uptime check** (UptimeRobot / Better Stack) on the API health endpoint. You want to know the router is down before a beta user tells you.

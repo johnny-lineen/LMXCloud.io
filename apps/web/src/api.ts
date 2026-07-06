@@ -1,21 +1,12 @@
 import type {
-
   ApiError,
-
   BalanceResponse,
-
   CreateKeyResponse,
-
   KeysResponse,
-
   LoginResponse,
-
   UsageHistoryResponse,
-
   UsageLogsResponse,
-
   UsageResponse,
-
 } from "./types";
 
 
@@ -85,24 +76,6 @@ export async function exchangeClerkSession(clerkToken: string): Promise<LoginRes
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<LoginResponse>;
-}
-
-export async function loginWithEmail(email: string): Promise<LoginResponse> {
-
-  const res = await fetch(`${API_BASE}/v1/auth/login`, {
-
-    method: "POST",
-
-    headers: { "Content-Type": "application/json" },
-
-    body: JSON.stringify({ email: email.trim() }),
-
-  });
-
-  if (!res.ok) throw new Error(await parseError(res));
-
-  return res.json() as Promise<LoginResponse>;
-
 }
 
 
@@ -271,6 +244,44 @@ export async function fetchUsageLogs(
 
 
 
+export interface ProviderStatusInfo {
+  healthy: boolean;
+  latency: number | null;
+  tier: number;
+  is_depin: boolean;
+  last_check: number | null;
+}
+
+export interface StatusResponse {
+  object: "status";
+  providers: Record<string, ProviderStatusInfo>;
+  fallback_chain: string[];
+}
+
+export interface ModelInfo {
+  id: string;
+  object: "model";
+  created: number;
+  owned_by: string;
+}
+
+export interface ModelsResponse {
+  object: "list";
+  data: ModelInfo[];
+}
+
+export async function fetchStatus(): Promise<StatusResponse> {
+  const res = await fetch(`${API_BASE}/v1/status`);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<StatusResponse>;
+}
+
+export async function fetchModels(): Promise<ModelsResponse> {
+  const res = await fetch(`${API_BASE}/v1/models`);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<ModelsResponse>;
+}
+
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
@@ -294,6 +305,14 @@ export interface LmxChatHeaders {
   latencyMs: number;
   cost: number;
   balance: number;
+}
+
+export interface LmxStreamMeta extends LmxChatHeaders {
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 export async function sendChatCompletion(
@@ -323,6 +342,117 @@ export async function sendChatCompletion(
       balance: Number(res.headers.get("x-lmx-balance") ?? 0),
     },
   };
+}
+
+export async function streamChatCompletion(
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  handlers: {
+    onToken: (token: string) => void;
+    onMeta: (meta: LmxStreamMeta) => void;
+  },
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ model, messages, stream: true }),
+  });
+
+  if (!res.ok) throw new Error(await parseError(res));
+  if (!res.body) throw new Error("Streaming not supported by this environment");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let eventName = "message";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+
+      buffer += decoder.decode(value, { stream: true });
+      let boundary = buffer.indexOf("\n\n");
+
+      while (boundary >= 0) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+
+        const lines = frame.split("\n").map((line) => line.trim());
+        const dataLines: string[] = [];
+        eventName = "message";
+
+        for (const line of lines) {
+          if (line.startsWith("event:")) {
+            eventName = line.slice(6).trim();
+            continue;
+          }
+          if (line.startsWith("data:")) {
+            dataLines.push(line.slice(5).trim());
+          }
+        }
+
+        const rawData = dataLines.join("\n");
+        if (!rawData) {
+          boundary = buffer.indexOf("\n\n");
+          continue;
+        }
+        if (rawData === "[DONE]") {
+          boundary = buffer.indexOf("\n\n");
+          continue;
+        }
+
+        const parsed = JSON.parse(rawData) as {
+          choices?: Array<{ delta?: { content?: string | null } }>;
+          provider?: string;
+          fallback?: boolean;
+          latencyMs?: number;
+          cost?: number;
+          balance?: number;
+          usage?: {
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+          };
+        };
+
+        if (eventName === "lmx.meta" && parsed.usage) {
+          handlers.onMeta({
+            provider: parsed.provider ?? "unknown",
+            fallback: parsed.fallback ?? false,
+            latencyMs: parsed.latencyMs ?? 0,
+            cost: parsed.cost ?? 0,
+            balance: parsed.balance ?? 0,
+            usage: parsed.usage,
+          });
+          boundary = buffer.indexOf("\n\n");
+          continue;
+        }
+
+        if (eventName === "lmx.error") {
+          const message =
+            typeof (parsed as { message?: unknown }).message === "string"
+              ? ((parsed as { message: string }).message ?? "Streaming error")
+              : "Streaming error";
+          throw new Error(message);
+        }
+
+        const token = parsed.choices?.[0]?.delta?.content;
+        if (typeof token === "string" && token.length > 0) {
+          handlers.onToken(token);
+        }
+
+        boundary = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 

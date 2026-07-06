@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createApiKey, streamChatCompletion, type ChatMessage } from "../api";
+import {
+  createApiKey,
+  sendChatCompletion,
+  streamChatCompletion,
+  type ChatMessage,
+} from "../api";
 import { clearDemoApiKey, readDemoApiKey, writeDemoApiKey } from "../lib/demo-storage";
 import {
   estimateOpenAiCost,
@@ -40,6 +45,27 @@ function formatSavings(percent: number, label: string): string {
   if (rounded === 0) return `Same price as OpenAI ${label}`;
   if (percent > 0) return `${rounded}% cheaper vs OpenAI ${label}`;
   return `${rounded}% more vs OpenAI ${label}`;
+}
+
+function buildMessageMeta(
+  model: string,
+  provider: string,
+  latencyMs: number,
+  cost: number,
+  promptTokens: number,
+  completionTokens: number,
+): MessageMeta {
+  const openAiCost = estimateOpenAiCost(promptTokens, completionTokens, model);
+  const bench = getOpenAiBenchmark(model);
+  return {
+    model,
+    provider,
+    latencyMs,
+    cost,
+    openAiCost,
+    savingsPercent: savingsVsOpenAi(cost, openAiCost),
+    openAiLabel: bench.label,
+  };
 }
 
 export function LandingChat() {
@@ -105,60 +131,88 @@ export function LandingChat() {
     setInput("");
     setSending(true);
 
+    const assistantEntryId = crypto.randomUUID();
+    let assistantContent = "";
+
+    setEntries((prev) => [
+      ...prev,
+      {
+        id: assistantEntryId,
+        role: "assistant",
+        content: "",
+      },
+    ]);
+
     try {
-      const streamEntryId = crypto.randomUUID();
-      let assistantContent = "";
+      let usedStreaming = true;
 
-      setEntries((prev) => [
-        ...prev,
-        {
-          id: streamEntryId,
-          role: "assistant",
-          content: "",
-        },
-      ]);
+      try {
+        await streamChatCompletion(apiKey, DEFAULT_MODEL, nextHistory, {
+          onToken: (token) => {
+            assistantContent += token;
+            setEntries((prev) =>
+              prev.map((entry) =>
+                entry.id === assistantEntryId
+                  ? { ...entry, content: assistantContent }
+                  : entry,
+              ),
+            );
+          },
+          onMeta: (meta) => {
+            setEntries((prev) =>
+              prev.map((entry) =>
+                entry.id === assistantEntryId
+                  ? {
+                      ...entry,
+                      content: assistantContent || "(empty response)",
+                      meta: buildMessageMeta(
+                        DEFAULT_MODEL,
+                        meta.provider,
+                        meta.latencyMs,
+                        meta.cost,
+                        meta.usage.prompt_tokens,
+                        meta.usage.completion_tokens,
+                      ),
+                    }
+                  : entry,
+              ),
+            );
+          },
+        });
+      } catch {
+        usedStreaming = false;
+        const { response, headers } = await sendChatCompletion(
+          apiKey,
+          DEFAULT_MODEL,
+          nextHistory,
+        );
+        assistantContent = response.choices[0]?.message?.content ?? "(empty response)";
+        const meta = buildMessageMeta(
+          DEFAULT_MODEL,
+          headers.provider,
+          headers.latencyMs,
+          headers.cost,
+          response.usage?.prompt_tokens ?? 0,
+          response.usage?.completion_tokens ?? 0,
+        );
 
-      await streamChatCompletion(apiKey, DEFAULT_MODEL, nextHistory, {
-        onToken: (token) => {
-          assistantContent += token;
-          setEntries((prev) =>
-            prev.map((entry) =>
-              entry.id === streamEntryId
-                ? {
-                    ...entry,
-                    content: assistantContent,
-                  }
-                : entry,
-            ),
-          );
-        },
-        onMeta: (meta) => {
-          const promptTokens = meta.usage.prompt_tokens;
-          const completionTokens = meta.usage.completion_tokens;
-          const openAiCost = estimateOpenAiCost(promptTokens, completionTokens, DEFAULT_MODEL);
-          const bench = getOpenAiBenchmark(DEFAULT_MODEL);
+        setEntries((prev) =>
+          prev.map((entry) =>
+            entry.id === assistantEntryId
+              ? { ...entry, content: assistantContent, meta }
+              : entry,
+          ),
+        );
+      }
 
-          setEntries((prev) =>
-            prev.map((entry) =>
-              entry.id === streamEntryId
-                ? {
-                    ...entry,
-                    content: assistantContent || "(empty response)",
-                    meta: {
-                      model: DEFAULT_MODEL,
-                      provider: meta.provider,
-                      latencyMs: meta.latencyMs,
-                      cost: meta.cost,
-                      openAiCost,
-                      savingsPercent: savingsVsOpenAi(meta.cost, openAiCost),
-                      openAiLabel: bench.label,
-                    },
-                  }
-                : entry,
-            ),
-          );
-        },
-      });
+      if (usedStreaming && !assistantContent) {
+        assistantContent = "(empty response)";
+        setEntries((prev) =>
+          prev.map((entry) =>
+            entry.id === assistantEntryId ? { ...entry, content: assistantContent } : entry,
+          ),
+        );
+      }
 
       setHistory((prev) => [
         ...prev,
@@ -166,15 +220,17 @@ export function LandingChat() {
       ]);
     } catch (err) {
       setHistory(nextHistory.slice(0, -1));
-      setEntries((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          content: "",
-          error: err instanceof Error ? err.message : "Request failed",
-        },
-      ]);
+      setEntries((prev) =>
+        prev.map((entry) =>
+          entry.id === assistantEntryId
+            ? {
+                ...entry,
+                content: "",
+                error: err instanceof Error ? err.message : "Request failed",
+              }
+            : entry,
+        ),
+      );
     } finally {
       setSending(false);
     }

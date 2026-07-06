@@ -50,6 +50,14 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `KEY_GEN_RATE_LIMIT_MAX` | No | `5` (conservative free-beta default) |
    | `KEY_GEN_RATE_LIMIT_WINDOW_MS` | No | `3600000` |
    | `CHAT_RATE_LIMIT_MAX` | No | `30` (conservative free-beta default) |
+   | `SIWE_DOMAIN` | Yes (wallet auth) | e.g. `lmxcloud.io` |
+   | `SIWE_URI` | Yes (wallet auth) | e.g. `https://lmxcloud.io` |
+   | `SIWE_CHAIN_ID` | No | `8453` (Base mainnet) |
+   | `BASE_RPC_URL` | Yes (deposits) | Alchemy/Infura Base RPC |
+   | `TREASURY_ADDRESS` | Yes (deposits) | Wallet that receives USDC |
+   | `USDC_CONTRACT_ADDRESS` | No | Mainnet default `0x833589…2913` |
+   | `DEPOSIT_CONFIRMATIONS` | No | `10` |
+   | `DEPOSIT_MAX_USDC` | No | `10000` per transfer |
 
    Do **not** set `PORT` — Railway injects it automatically.
 
@@ -76,6 +84,8 @@ Invoke-RestMethod -Uri "https://YOUR-RAILWAY-URL/v1/status"
    |----------|-------|
    | `VITE_API_URL` | Railway API URL (no trailing slash) |
    | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (`pk_test_...` or `pk_live_...`) |
+   | `VITE_CHAIN_ID` | Must match API `SIWE_CHAIN_ID` (`8453` mainnet) |
+   | `VITE_BASE_RPC_URL` | Recommended — same Base RPC as API for reliable balance reads |
    | `VITE_DEMO_URL` | Optional — Vercel demo URL if you deploy `apps/demo` |
 
 5. Deploy

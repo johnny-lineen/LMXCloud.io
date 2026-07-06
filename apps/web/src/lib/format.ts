@@ -35,3 +35,16 @@ export function maskKey(key: string): string {
   if (key.length <= 12) return key;
   return `${key.slice(0, 8)}…${key.slice(-4)}`;
 }
+
+export function formatWallet(address: string): string {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+export function txExplorerUrl(chain: string, txHash: string): string {
+  const base =
+    chain === "base-sepolia"
+      ? "https://sepolia.basescan.org/tx/"
+      : "https://basescan.org/tx/";
+  return `${base}${txHash}`;
+}

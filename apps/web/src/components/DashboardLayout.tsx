@@ -9,11 +9,14 @@ import {
   ScrollText,
 } from "lucide-react";
 import { Link, NavLink, Outlet } from "react-router-dom";
+import { useDisconnect } from "wagmi";
 import { useAuth } from "../context/AuthContext";
-import { maskKey } from "../lib/format";
+import { useClerkSignOut } from "../context/ClerkBridge";
+import { formatWallet, maskKey } from "../lib/format";
 import { cn } from "../lib/cn";
 import { Button } from "./ui/Button";
 import { Chip } from "./ui/Chip";
+import { WalletSessionGuard } from "./WalletSessionGuard";
 
 const NAV = [
   {
@@ -45,7 +48,24 @@ const GRID_BG = {
 };
 
 export function DashboardLayout() {
-  const { apiKey, email, logout } = useAuth();
+  const { apiKey, email, wallet, authMode, logout } = useAuth();
+  const clerkSignOut = useClerkSignOut();
+  const { disconnect } = useDisconnect();
+
+  async function handleLogout() {
+    await logout();
+    if (authMode === "wallet") {
+      disconnect();
+    }
+    if (authMode === "clerk" && clerkSignOut) {
+      await clerkSignOut();
+    }
+  }
+
+  const identityLabel =
+    authMode === "wallet" && wallet
+      ? formatWallet(wallet)
+      : email || "Signed in";
 
   return (
     <div className="min-h-screen bg-background lg:flex">
@@ -92,8 +112,9 @@ export function DashboardLayout() {
 
         <div className="hidden border-t border-border p-4 lg:block">
           <div className="rounded-lg border border-border bg-elevated/50 p-4">
-            {email && (
-              <p className="truncate text-body-sm font-medium text-on-surface">{email}</p>
+            <p className="truncate text-body-sm font-medium text-on-surface">{identityLabel}</p>
+            {authMode === "wallet" && (
+              <p className="mt-0.5 text-body-sm text-on-surface-faint">Wallet account</p>
             )}
             {apiKey && (
               <p className="mt-1 truncate text-mono-sm text-on-surface-faint">
@@ -122,7 +143,7 @@ export function DashboardLayout() {
                 size="sm"
                 dangerHover
                 className="w-full justify-start"
-                onClick={() => void logout()}
+                onClick={() => void handleLogout()}
               >
                 <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
                 Sign out
@@ -142,17 +163,16 @@ export function DashboardLayout() {
         <header className="relative z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm lg:hidden">
           <div className="min-w-0">
             <p className="text-body-sm font-medium text-on-surface">LMX Cloud</p>
-            {email && (
-              <p className="truncate text-body-sm text-on-surface-faint">{email}</p>
-            )}
+            <p className="truncate text-body-sm text-on-surface-faint">{identityLabel}</p>
           </div>
-          <Button type="button" variant="tertiary" size="sm" onClick={() => void logout()}>
+          <Button type="button" variant="tertiary" size="sm" onClick={() => void handleLogout()}>
             Sign out
           </Button>
         </header>
 
         <main className="relative z-10 flex-1 overflow-auto">
           <div className="mx-auto max-w-[1100px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+            <WalletSessionGuard />
             <Outlet />
           </div>
         </main>

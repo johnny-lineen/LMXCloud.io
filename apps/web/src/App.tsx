@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { DashboardLayout } from "./components/DashboardLayout";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import { useAuth } from "./context/AuthContext";
+import { CLERK_PUBLISHABLE_KEY } from "./lib/clerk";
 import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { BillingPage } from "./pages/BillingPage";
 import { KeysPage } from "./pages/KeysPage";
@@ -14,10 +15,17 @@ import { SignUpPage } from "./pages/SignUpPage";
 import { UsagePage } from "./pages/UsagePage";
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { clerkSignedIn, sessionReady, loading } = useAuth();
+  const { sessionReady, loading } = useAuth();
 
-  if (!clerkSignedIn) return <Navigate to="/sign-in" replace />;
-  if (loading || !sessionReady) return <Navigate to="/auth/callback" replace />;
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <p className="text-body-sm text-on-surface-muted">Loading session…</p>
+      </div>
+    );
+  }
+
+  if (!sessionReady) return <Navigate to="/sign-in" replace />;
 
   return children;
 }
@@ -38,7 +46,16 @@ function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route path="/docs" element={<DocsPage />} />
-      <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route
+        path="/auth/callback"
+        element={
+          CLERK_PUBLISHABLE_KEY ? (
+            <AuthCallbackPage />
+          ) : (
+            <Navigate to="/sign-in" replace />
+          )
+        }
+      />
       <Route
         path="/sign-in/*"
         element={
@@ -84,10 +101,8 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
-    </AuthProvider>
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   );
 }

@@ -1,6 +1,6 @@
 import { KeyRound, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { createApiKey, fetchKeys, revokeApiKey } from "../api";
+import { createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
 import {
   DataTable,
@@ -16,11 +16,11 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
 import { useAuth } from "../context/AuthContext";
-import { formatDateTime, formatNumber, formatUsd } from "../lib/format";
+import { formatDateTime, formatNumber, formatUsd, formatWallet } from "../lib/format";
 import type { ApiKeyInfo } from "../types";
 
 export function KeysPage() {
-  const { apiKey, email, logout, retrySession } = useAuth();
+  const { apiKey, email, wallet, authMode, logout } = useAuth();
   const [keys, setKeys] = useState<ApiKeyInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -52,7 +52,7 @@ export function KeysPage() {
     setError(null);
     setNewKey(null);
     try {
-      const result = await createApiKey(email || undefined);
+      const result = await createAccountApiKey(apiKey);
       setNewKey(result.api_key);
       await load();
     } catch (err) {
@@ -89,7 +89,11 @@ export function KeysPage() {
       <PageHeader
         eyebrow="Credentials"
         title="API Keys"
-        description={`Manage keys linked to ${email || "your account"}. Keys authenticate inference requests.`}
+        description={`Manage keys linked to ${
+          authMode === "wallet" && wallet
+            ? formatWallet(wallet)
+            : email || "your account"
+        }. Keys authenticate inference requests.`}
         actions={
           <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
             <Plus className="h-4 w-4" strokeWidth={1.75} />
@@ -107,16 +111,17 @@ export function KeysPage() {
             {newKey}
           </code>
           <p className="mt-3 text-body-sm text-on-surface-muted">
-            Copy this key now. It won&apos;t be shown again.
+            Copy this key now. It won&apos;t be shown again. Your dashboard session
+            stays on the current key — use the new key in API requests or scripts.
           </p>
           <Button
             type="button"
             variant="secondary"
             size="sm"
             className="mt-4"
-            onClick={() => void retrySession()}
+            onClick={() => void load()}
           >
-            Refresh session
+            Refresh list
           </Button>
         </Card>
       )}

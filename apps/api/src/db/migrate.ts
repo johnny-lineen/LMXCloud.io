@@ -39,6 +39,31 @@ const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_usage_events_api_key_created
     ON usage_events (api_key_id, created_at DESC)`,
+  `CREATE TABLE IF NOT EXISTS wallet_auth_nonces (
+    address TEXT PRIMARY KEY,
+    nonce TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS deposit_scan_state (
+    id TEXT PRIMARY KEY DEFAULT 'base_usdc',
+    last_scanned_block BIGINT NOT NULL DEFAULT 0
+  )`,
+  `CREATE TABLE IF NOT EXISTS usdc_deposits (
+    tx_hash TEXT NOT NULL,
+    log_index INTEGER NOT NULL,
+    from_address TEXT NOT NULL,
+    to_address TEXT NOT NULL,
+    amount_usdc NUMERIC(18, 8) NOT NULL,
+    block_number BIGINT NOT NULL,
+    confirmations INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'pending',
+    api_key_id UUID REFERENCES api_keys(id),
+    credited_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (tx_hash, log_index)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_usdc_deposits_from
+    ON usdc_deposits (from_address) WHERE status = 'pending'`,
 ];
 
 export async function runMigrations(): Promise<void> {

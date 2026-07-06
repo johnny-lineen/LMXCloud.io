@@ -1,22 +1,24 @@
-import { ClerkProvider } from "@clerk/clerk-react";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider } from "wagmi";
+import { ClerkProvider } from "@clerk/clerk-react";
 import App from "./App";
 import "./index.css";
-import { Card } from "./components/ui/Card";
+import { AuthProvider } from "./context/AuthContext";
+import { ClerkBridge } from "./context/ClerkBridge";
 import { CLERK_PUBLISHABLE_KEY } from "./lib/clerk";
+import { queryClient, wagmiConfig } from "./lib/wagmi";
 
-function MissingClerkConfig() {
+function AppShell() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="max-w-md text-center">
-        <h1 className="text-title-md text-on-surface">Clerk not configured</h1>
-        <p className="mt-2 text-body-sm text-on-surface-muted">
-          Set <code className="text-on-surface">VITE_CLERK_PUBLISHABLE_KEY</code> in{" "}
-          <code className="text-on-surface">apps/web/.env</code> and restart the dev server.
-        </p>
-      </Card>
-    </div>
+    <QueryClientProvider client={queryClient}>
+      <WagmiProvider config={wagmiConfig}>
+        <AuthProvider clerkEnabled={Boolean(CLERK_PUBLISHABLE_KEY)}>
+          <App />
+        </AuthProvider>
+      </WagmiProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -30,10 +32,12 @@ createRoot(document.getElementById("root")!).render(
         afterSignInUrl="/auth/callback"
         afterSignUpUrl="/auth/callback"
       >
-        <App />
+        <ClerkBridge>
+          <AppShell />
+        </ClerkBridge>
       </ClerkProvider>
     ) : (
-      <MissingClerkConfig />
+      <AppShell />
     )}
   </StrictMode>,
 );

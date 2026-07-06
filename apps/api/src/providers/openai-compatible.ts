@@ -23,6 +23,10 @@ export function createOpenAiCompatibleAdapter(config: OpenAiCompatibleConfig): P
     isDepin: config.isDepin,
     aliases: config.aliases,
 
+    supportsModel(model: string): boolean {
+      return config.aliases.includes(model);
+    },
+
     async healthCheck(): Promise<ProviderHealthResult> {
       const start = performance.now();
 

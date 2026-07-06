@@ -1,9 +1,14 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import * as Sentry from "@sentry/node";
+import { getAddress } from "viem";
 import { createApiKeyStore, createAuthHook } from "./auth/index.js";
+import { createWalletNonceStore } from "./auth/wallet-nonce.js";
 import { loadConfig } from "./config.js";
 import { closePool } from "./db/pool.js";
+import { DepositPoller } from "./deposits/poller.js";
+import { MIN_DEPOSIT_USDC } from "./deposits/limits.js";
+import { createDepositStore } from "./deposits/store.js";
 import { HealthMonitor } from "./health/monitor.js";
 import { InMemoryHealthStore } from "./health/store.js";
 import { createProviderRegistry, getFallbackChain } from "./providers/registry.js";
@@ -39,11 +44,7 @@ export async function buildServer() {
   if (process.env.SENTRY_DSN) {
     Sentry.init({
       dsn: process.env.SENTRY_DSN,
-      integrations: [
-        Sentry.profilingIntegration(),
-      ],
       tracesSampleRate: 0.1,
-      profilesSampleRate: 0.1,
     });
   } else {
     app.log.warn("SENTRY_DSN is not set — errors will not be reported to Sentry");
@@ -108,9 +109,36 @@ export async function buildServer() {
 
   const creditStore = createCreditStore();
 
+  const walletNonceStore = createWalletNonceStore();
+
   const authenticate = createAuthHook(apiKeyStore, {
     sessionSecret: config.sessionSecret,
   });
+
+  let depositPoller: DepositPoller | null = null;
+  const depositStore = createDepositStore();
+  if (config.deposits && depositStore) {
+    depositPoller = new DepositPoller(
+      {
+        rpcUrl: config.deposits.rpcUrl,
+        treasuryAddress: getAddress(config.deposits.treasuryAddress),
+        usdcContractAddress: getAddress(config.deposits.usdcContractAddress),
+        chainId: config.deposits.chainId,
+        confirmations: config.deposits.confirmations,
+        pollIntervalMs: config.deposits.pollIntervalMs,
+        lookbackBlocks: config.deposits.lookbackBlocks,
+        maxDepositUsdc: config.deposits.maxDepositUsdc,
+      },
+      depositStore,
+      apiKeyStore,
+      (message) => app.log.info(message),
+    );
+    depositPoller.start();
+  } else if (process.env.TREASURY_ADDRESS || process.env.BASE_RPC_URL) {
+    app.log.warn(
+      "Deposit poller disabled — requires DATABASE_URL, BASE_RPC_URL, and TREASURY_ADDRESS",
+    );
+  }
 
 
 
@@ -119,6 +147,8 @@ export async function buildServer() {
   app.addHook("onClose", async () => {
 
     healthMonitor.stop();
+
+    depositPoller?.stop();
 
     await closePool();
 
@@ -153,6 +183,8 @@ export async function buildServer() {
     sessionSecret: config.sessionSecret,
     sessionTtlMs: config.sessionTtlMs,
     clerkSecretKey: config.clerkSecretKey,
+    walletNonceStore,
+    siwe: config.siwe,
   });
 
   await registerStatusRoutes(app, { providers, healthStore });
@@ -170,7 +202,23 @@ export async function buildServer() {
     minChatCost: config.minChatCost,
   });
   await registerUsageRoutes(app, { store: usageStore, apiKeyStore, authenticate });
-  await registerBalanceRoutes(app, { creditStore, authenticate });
+  await registerBalanceRoutes(app, {
+    creditStore,
+    authenticate,
+    depositStore,
+    depositInfo: config.deposits
+      ? {
+          treasuryAddress: getAddress(config.deposits.treasuryAddress),
+          usdcContractAddress: getAddress(config.deposits.usdcContractAddress),
+          chain: config.deposits.chainLabel,
+          chainId: config.deposits.chainId,
+          token: "USDC",
+          confirmations: config.deposits.confirmations,
+          minDepositUsdc: MIN_DEPOSIT_USDC,
+          maxDepositUsdc: config.deposits.maxDepositUsdc,
+        }
+      : undefined,
+  });
 
 
 

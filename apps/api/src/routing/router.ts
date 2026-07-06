@@ -1,6 +1,7 @@
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
 import {
   AllProvidersDownError,
+  ModelNotSupportedError,
   ProviderError,
   type ProviderAdapter,
 } from "../providers/types.js";
@@ -34,10 +35,16 @@ export class InferenceRouter {
       throw new AllProvidersDownError(depinOnly);
     }
 
+    const capable = order.filter((provider) => provider.supportsModel(request.model));
+
+    if (capable.length === 0) {
+      throw new ModelNotSupportedError(request.model);
+    }
+
     let lastError: ProviderError | undefined;
 
-    for (let index = 0; index < order.length; index++) {
-      const provider = order[index]!;
+    for (let index = 0; index < capable.length; index++) {
+      const provider = capable[index]!;
 
       try {
         const result = await provider.chatCompletion(request);

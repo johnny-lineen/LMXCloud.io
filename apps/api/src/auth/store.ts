@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { generateApiKey, hashApiKey } from "./keys.js";
+import { normalizeWalletAddress } from "./wallet.js";
 
 export interface ApiKeyRecord {
   id: string;
@@ -23,10 +24,12 @@ export interface ApiKeyStore {
   findByPlainKey(plainKey: string): Promise<ApiKeyRecord | null>;
   findById(id: string): Promise<ApiKeyRecord | null>;
   findPrimaryKeyForEmail(email: string): Promise<ApiKeyRecord | null>;
+  findPrimaryKeyForWallet(wallet: string): Promise<ApiKeyRecord | null>;
   touchLastUsed(id: string): Promise<void>;
   listForRecord(record: ApiKeyRecord): Promise<ApiKeyRecord[]>;
   revoke(id: string, owner: ApiKeyRecord): Promise<boolean>;
   emailHasAccount(email: string): Promise<boolean>;
+  walletHasAccount(wallet: string): Promise<boolean>;
 }
 
 export class FileApiKeyStore implements ApiKeyStore {
@@ -64,7 +67,7 @@ export class FileApiKeyStore implements ApiKeyStore {
       id: crypto.randomUUID(),
       keyHash: hashApiKey(plainKey),
       email: input.email,
-      wallet: input.wallet,
+      wallet: input.wallet ? normalizeWalletAddress(input.wallet) : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -96,6 +99,24 @@ export class FileApiKeyStore implements ApiKeyStore {
       .filter(
         (entry) =>
           !entry.revokedAt && entry.email?.trim().toLowerCase() === normalized,
+      )
+      .sort((a, b) => {
+        const aUsed = a.lastUsedAt ? Date.parse(a.lastUsedAt) : 0;
+        const bUsed = b.lastUsedAt ? Date.parse(b.lastUsedAt) : 0;
+        if (bUsed !== aUsed) return bUsed - aUsed;
+        return b.createdAt.localeCompare(a.createdAt);
+      });
+
+    return matches[0] ?? null;
+  }
+
+  async findPrimaryKeyForWallet(wallet: string): Promise<ApiKeyRecord | null> {
+    await this.ensureLoaded();
+    const normalized = wallet.trim().toLowerCase();
+    const matches = this.records
+      .filter(
+        (entry) =>
+          !entry.revokedAt && entry.wallet?.trim().toLowerCase() === normalized,
       )
       .sort((a, b) => {
         const aUsed = a.lastUsedAt ? Date.parse(a.lastUsedAt) : 0;
@@ -160,6 +181,16 @@ export class FileApiKeyStore implements ApiKeyStore {
       (entry) =>
         !entry.revokedAt &&
         entry.email?.trim().toLowerCase() === normalized,
+    );
+  }
+
+  async walletHasAccount(wallet: string): Promise<boolean> {
+    await this.ensureLoaded();
+    const normalized = wallet.trim().toLowerCase();
+    return this.records.some(
+      (entry) =>
+        !entry.revokedAt &&
+        entry.wallet?.trim().toLowerCase() === normalized,
     );
   }
 }

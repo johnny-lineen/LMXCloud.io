@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { DEFAULT_MODEL_ALIAS, formatModelProviders, listUniqueModelAliases } from "@lmxcloud/shared";
 import {
   createApiKey,
   sendChatCompletion,
@@ -15,7 +16,7 @@ import { Button } from "./ui/Button";
 import { Chip } from "./ui/Chip";
 import { Input } from "./ui/Input";
 
-const DEFAULT_MODEL = "llama-3-70b";
+const SUPPORTED_MODELS = listUniqueModelAliases();
 
 interface MessageMeta {
   model: string;
@@ -70,6 +71,7 @@ function buildMessageMeta(
 
 export function LandingChat() {
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [model, setModel] = useState(DEFAULT_MODEL_ALIAS);
   const [keyLoading, setKeyLoading] = useState(true);
   const [keyError, setKeyError] = useState<string | null>(null);
   const [entries, setEntries] = useState<ChatEntry[]>([
@@ -147,7 +149,7 @@ export function LandingChat() {
       let usedStreaming = true;
 
       try {
-        await streamChatCompletion(apiKey, DEFAULT_MODEL, nextHistory, {
+        await streamChatCompletion(apiKey, model, nextHistory, {
           onToken: (token) => {
             assistantContent += token;
             setEntries((prev) =>
@@ -166,7 +168,7 @@ export function LandingChat() {
                       ...entry,
                       content: assistantContent || "(empty response)",
                       meta: buildMessageMeta(
-                        DEFAULT_MODEL,
+                        model,
                         meta.provider,
                         meta.latencyMs,
                         meta.cost,
@@ -183,12 +185,12 @@ export function LandingChat() {
         usedStreaming = false;
         const { response, headers } = await sendChatCompletion(
           apiKey,
-          DEFAULT_MODEL,
+          model,
           nextHistory,
         );
         assistantContent = response.choices[0]?.message?.content ?? "(empty response)";
         const meta = buildMessageMeta(
-          DEFAULT_MODEL,
+          model,
           headers.provider,
           headers.latencyMs,
           headers.cost,
@@ -249,10 +251,26 @@ export function LandingChat() {
         <div>
           <p className="text-body-sm font-medium text-on-surface">Live chat demo</p>
           <p className="text-body-sm text-on-surface-muted">
-            Throwaway key · {DEFAULT_MODEL} · metered usage
+            Throwaway key · metered usage
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <label className="sr-only" htmlFor="demo-model">
+            Model
+          </label>
+          <select
+            id="demo-model"
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            disabled={sending || keyLoading}
+            className="max-w-[11rem] rounded-md border border-border bg-background px-2 py-1.5 text-body-sm text-on-surface"
+          >
+            {SUPPORTED_MODELS.map((entry) => (
+              <option key={entry.alias} value={entry.alias}>
+                {entry.label} ({formatModelProviders(entry)})
+              </option>
+            ))}
+          </select>
           {keyLoading ? (
             <span className="text-body-sm text-on-surface-muted">Connecting…</span>
           ) : keyError ? (
@@ -351,7 +369,7 @@ export function LandingChat() {
             New key
           </button>
           {" · "}
-          OpenAI comparison uses {getOpenAiBenchmark(DEFAULT_MODEL).label} list pricing for the same
+          OpenAI comparison uses {getOpenAiBenchmark(model).label} list pricing for the same
           token counts.
         </p>
       </form>

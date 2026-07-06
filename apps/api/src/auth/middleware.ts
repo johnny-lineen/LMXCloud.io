@@ -1,6 +1,10 @@
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { extractBearerToken, isValidApiKeyFormat } from "./keys.js";
-import { isSessionTokenFormat, verifySessionToken } from "./session.js";
+import {
+  isSessionTokenFormat,
+  sessionIdentityMatchesRecord,
+  verifySessionToken,
+} from "./session.js";
 import type { ApiKeyRecord, ApiKeyStore } from "./store.js";
 
 declare module "fastify" {
@@ -41,7 +45,7 @@ export function createAuthHook(store: ApiKeyStore, options: AuthHookOptions) {
       }
 
       const record = await store.findById(payload.id);
-      if (!record || record.email?.trim().toLowerCase() !== payload.email) {
+      if (!record || !sessionIdentityMatchesRecord(payload, record)) {
         return reply.status(401).send({
           error: {
             message: "Invalid or expired session",

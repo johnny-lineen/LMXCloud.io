@@ -1,5 +1,12 @@
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import {
+  DEFAULT_MODEL_ALIAS,
+  listUniqueModelAliases,
+  MODEL_CATEGORIES,
+  type ModelCategory,
+  type SupportedModel,
+} from "@lmxcloud/shared";
+import {
   ArrowRight,
   BarChart3,
   Code2,
@@ -18,7 +25,30 @@ import { Chip } from "../components/ui/Chip";
 import { cn } from "../lib/cn";
 import { formatHeroSavings, getHeroSavingsHint } from "../lib/openai-benchmark";
 
-const PROVIDERS = ["io.net", "AkashML", "RunPod", "Auto-fallback"];
+const SUPPORTED_MODEL_LIST = listUniqueModelAliases();
+
+const MODELS_BY_CATEGORY = SUPPORTED_MODEL_LIST.reduce<
+  Partial<Record<ModelCategory, SupportedModel[]>>
+>((groups, model) => {
+  const bucket = groups[model.category] ?? [];
+  bucket.push(model);
+  groups[model.category] = bucket;
+  return groups;
+}, {});
+
+const PROVIDERS = ["io.net", "AkashML", "Auto-fallback"];
+
+const CATEGORY_ORDER: ModelCategory[] = [
+  "meta",
+  "qwen",
+  "deepseek",
+  "glm",
+  "mistral",
+  "kimi",
+  "openai",
+  "google",
+  "minimax",
+];
 
 const HERO_STATS = [
   {
@@ -119,6 +149,7 @@ export function LandingPage() {
             {(
               [
                 { href: "#features", label: "Features" },
+                { href: "#models", label: "Models" },
                 { href: "#how-it-works", label: "How it works" },
                 { href: "#try-chat", label: "Live demo" },
               ] as const
@@ -190,7 +221,7 @@ export function LandingPage() {
                   Cheaper, resilient LLM inference
                 </h1>
                 <p className="mt-2 text-headline-md font-semibold text-on-surface-muted">
-                  through decentralized compute
+                  through <span className="text-primary">decentralized</span> compute
                 </p>
                 <p className="mt-6 max-w-lg text-body-md text-on-surface-muted">
                   LMX Cloud routes your requests across io.net, AkashML, and other providers with
@@ -249,6 +280,65 @@ export function LandingPage() {
               {FEATURES.map((feature) => (
                 <FeatureCard key={feature.title} {...feature} />
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Models */}
+        <section id="models" className="border-b border-border py-16 sm:py-20">
+          <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
+            <SectionHeader
+              eyebrow="Model catalog"
+              title={`${SUPPORTED_MODEL_LIST.length} models on DePIN compute`}
+              description="Short aliases route to io.net and AkashML upstream IDs. Models on both networks failover automatically; io.net-only models route when Akash is skipped."
+            />
+            <p className="mt-4 text-body-sm text-on-surface-muted">
+              Default: <code className="text-mono-sm">{DEFAULT_MODEL_ALIAS}</code> — try any alias in
+              the live demo or pass it as <code className="text-mono-sm">model</code> in your API
+              requests.
+            </p>
+            <div className="mt-10 space-y-10">
+              {CATEGORY_ORDER.map((category) => {
+                const models = MODELS_BY_CATEGORY[category];
+                if (!models?.length) return null;
+
+                return (
+                  <div key={category}>
+                    <h3 className="text-title-md text-on-surface">
+                      {MODEL_CATEGORIES[category]}
+                    </h3>
+                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {models.map((model) => (
+                        <Card key={model.alias} className="flex flex-col gap-2">
+                          <div>
+                            <p className="text-body-sm font-medium text-on-surface">
+                              {model.label}
+                            </p>
+                            <p className="mt-1 text-mono-sm text-on-surface-muted">
+                              {model.alias}
+                            </p>
+                          </div>
+                          <div className="mt-auto flex flex-wrap gap-1.5">
+                            {model.providers.map((provider) => (
+                              <Chip key={provider} tone={provider === "akash" ? "info" : "default"}>
+                                {provider === "ionet" ? "io.net" : "AkashML"}
+                              </Chip>
+                            ))}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Button to="/docs#models" variant="secondary" size="sm">
+                API model reference
+              </Button>
+              <Button to="/status" variant="tertiary" size="sm">
+                Provider status
+              </Button>
             </div>
           </div>
         </section>
@@ -361,6 +451,9 @@ export function LandingPage() {
           <div className="flex flex-wrap gap-4 text-body-sm text-on-surface-muted">
             <a href="#features" className="hover:text-on-surface">
               Features
+            </a>
+            <a href="#models" className="hover:text-on-surface">
+              Models
             </a>
             <a href="#how-it-works" className="hover:text-on-surface">
               How it works

@@ -145,8 +145,17 @@ data/             Local API key store (gitignored)
 
 ## Supported models (aliases)
 
-| LMX alias     | io.net model                          |
-|---------------|---------------------------------------|
-| `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct`   |
+LMX exposes **30 short aliases** mapped to io.net and AkashML upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live chat completions.
 
-Each provider maps aliases to its own upstream model ID.
+`GET /v1/models` returns aliases from **healthy** providers only. The router skips providers that do not support the requested alias.
+
+| LMX alias | Upstream ID | io.net | AkashML |
+|-----------|-------------|:------:|:-------:|
+| `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct` | ✓ | ✓ |
+| `llama-3.3-70b` | same | ✓ | ✓ |
+| `qwen-3.6-35b` | `Qwen/Qwen3.6-35B-A3B` | ✓ | ✓ |
+| `deepseek-v4-flash` | `deepseek-ai/DeepSeek-V4-Flash` | ✓ | ✓ |
+| `glm-5.2` | `zai-org/GLM-5.2` | ✓ | ✓ |
+| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ |
+
+Plus io.net-only models (`llama-4-maverick`, `deepseek-r1`, `kimi-k2.6`, `gpt-oss-120b`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list.

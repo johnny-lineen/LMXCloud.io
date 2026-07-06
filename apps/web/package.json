@@ -11,10 +11,14 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.61.3",
+    "@lmxcloud/shared": "workspace:*",
+    "@tanstack/react-query": "^5.101.2",
     "lucide-react": "^1.23.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.6.2"
+    "react-router-dom": "^7.6.2",
+    "viem": "^2.54.6",
+    "wagmi": "^3.6.21"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.1",

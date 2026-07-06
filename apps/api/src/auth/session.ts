@@ -2,14 +2,25 @@ import crypto from "crypto";
 
 const PREFIX = "lmx_sess_";
 
+export type SessionIdentity =
+  | { email: string; wallet?: never }
+  | { wallet: string; email?: never };
+
 export interface SessionPayload {
   id: string;
-  email: string;
+  email?: string;
+  wallet?: string;
   exp: number;
 }
 
 export function isSessionTokenFormat(token: string): boolean {
   return token.startsWith(PREFIX);
+}
+
+function signPayload(payload: SessionPayload, secret: string): string {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
+  return `${PREFIX}${body}.${sig}`;
 }
 
 export function createSessionToken(
@@ -18,14 +29,28 @@ export function createSessionToken(
   secret: string,
   ttlMs: number,
 ): string {
+  return createSessionTokenForIdentity(
+    apiKeyId,
+    { email: email.trim().toLowerCase() },
+    secret,
+    ttlMs,
+  );
+}
+
+export function createSessionTokenForIdentity(
+  apiKeyId: string,
+  identity: SessionIdentity,
+  secret: string,
+  ttlMs: number,
+): string {
   const payload: SessionPayload = {
     id: apiKeyId,
-    email: email.trim().toLowerCase(),
     exp: Date.now() + ttlMs,
+    ...(identity.email !== undefined
+      ? { email: identity.email.trim().toLowerCase() }
+      : { wallet: identity.wallet.trim().toLowerCase() }),
   };
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = crypto.createHmac("sha256", secret).update(body).digest("base64url");
-  return `${PREFIX}${body}.${sig}`;
+  return signPayload(payload, secret);
 }
 
 export function verifySessionToken(
@@ -54,7 +79,9 @@ export function verifySessionToken(
       Buffer.from(body, "base64url").toString("utf-8"),
     ) as SessionPayload;
 
-    if (!payload.id || !payload.email || payload.exp < Date.now()) {
+    const hasEmail = Boolean(payload.email?.trim());
+    const hasWallet = Boolean(payload.wallet?.trim());
+    if (!payload.id || payload.exp < Date.now() || hasEmail === hasWallet) {
       return null;
     }
 
@@ -62,4 +89,17 @@ export function verifySessionToken(
   } catch {
     return null;
   }
+}
+
+export function sessionIdentityMatchesRecord(
+  payload: SessionPayload,
+  record: { email?: string; wallet?: string },
+): boolean {
+  if (payload.email) {
+    return record.email?.trim().toLowerCase() === payload.email.trim().toLowerCase();
+  }
+  if (payload.wallet) {
+    return record.wallet?.trim().toLowerCase() === payload.wallet.trim().toLowerCase();
+  }
+  return false;
 }

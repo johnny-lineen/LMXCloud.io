@@ -5,7 +5,7 @@
     "dev": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api dev",
     "dev:demo": "pnpm --filter @lmxcloud/demo dev",
     "dev:cli": "pnpm --filter @lmxcloud/cli dev",
-    "dev:web": "pnpm --filter @lmxcloud/web dev",
+    "dev:web": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/web dev",
     "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build && pnpm --filter @lmxcloud/web build",
     "build:demo": "pnpm --filter @lmxcloud/demo build",
     "build:web": "pnpm --filter @lmxcloud/web build",

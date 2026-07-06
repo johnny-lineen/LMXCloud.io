@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { listUniqueModelAliases } from "@lmxcloud/shared";
 import { API_BASE, fetchModels, type ModelsResponse } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
 import { PageHeader } from "../components/console/PageHeader";
@@ -31,6 +32,8 @@ const SECTIONS = [
 ] as const;
 
 const EXAMPLE_BASE = API_BASE;
+
+const CATALOG_MODELS = listUniqueModelAliases();
 
 export function DocsPage() {
   const [models, setModels] = useState<ModelsResponse | null>(null);
@@ -364,10 +367,42 @@ data: {
                 </DataTable>
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                Each provider maps aliases to its own upstream model ID. Common aliases include{" "}
-                <code className="text-mono-sm">llama-3-70b</code>,{" "}
-                <code className="text-mono-sm">llama-3-8b</code>, and{" "}
-                <code className="text-mono-sm">mistral-7b</code>.
+                Each provider maps aliases to its own upstream model ID. The router only tries
+                providers that support the requested alias.
+              </p>
+              <div className="mt-6">
+                <DataTable title="Alias → upstream model" minWidth={800}>
+                  <DataTableHead>
+                    <tr>
+                      <DataTableTh>LMX alias</DataTableTh>
+                      <DataTableTh>Upstream ID</DataTableTh>
+                      <DataTableTh>io.net</DataTableTh>
+                      <DataTableTh>AkashML</DataTableTh>
+                    </tr>
+                  </DataTableHead>
+                  <DataTableBody>
+                    {CATALOG_MODELS.map((model) => (
+                      <DataTableRow key={model.alias}>
+                        <DataTableCell mono>{model.alias}</DataTableCell>
+                        <DataTableCell mono>{model.upstreamId}</DataTableCell>
+                        <DataTableCell>
+                          {model.providers.includes("ionet") ? "✓" : "—"}
+                        </DataTableCell>
+                        <DataTableCell>
+                          {model.providers.includes("akash") ? "✓" : "—"}
+                        </DataTableCell>
+                      </DataTableRow>
+                    ))}
+                  </DataTableBody>
+                </DataTable>
+              </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Five models are on both io.net and AkashML; the rest route through io.net when
+                configured. See the{" "}
+                <Link to="/#models" className="text-primary hover:text-primary-hover">
+                  landing page
+                </Link>{" "}
+                for labels grouped by family.
               </p>
             </DocSection>
 

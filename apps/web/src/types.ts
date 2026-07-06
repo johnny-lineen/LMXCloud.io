@@ -99,6 +99,50 @@ export interface CreateKeyResponse {
 export interface LoginResponse {
   object: string;
   session_token: string;
-  email: string;
+  email?: string;
+  wallet?: string;
   api_key_id: string;
+  created_account?: boolean;
+}
+
+export interface WalletNonceResponse {
+  object: string;
+  address: string;
+  nonce: string;
+  expires_at: string;
+  chain_id: number;
+  domain: string;
+  uri: string;
+}
+
+export interface DepositInfoResponse {
+  object: string;
+  treasury_address: string;
+  usdc_contract_address: string;
+  chain: string;
+  chain_id: number;
+  token: string;
+  confirmations_required: number;
+  min_deposit_usdc: number;
+  max_deposit_usdc: number;
+  wallet: string;
+  note: string;
+}
+
+export interface DepositReceipt {
+  object: string;
+  tx_hash: string;
+  amount: number;
+  currency: string;
+  status: "pending" | "credited" | "unmatched";
+  confirmations: number;
+  created_at: string;
+  credited_at: string | null;
+}
+
+export interface DepositHistoryResponse {
+  object: string;
+  chain: string;
+  confirmations_required: number;
+  data: DepositReceipt[];
 }

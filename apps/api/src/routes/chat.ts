@@ -1,7 +1,7 @@
 import type { FastifyInstance, preHandlerHookHandler } from "fastify";
 import type { ChatCompletionRequest } from "@lmxcloud/shared";
 import * as Sentry from "@sentry/node";
-import { AllProvidersDownError, ProviderError } from "../providers/types.js";
+import { AllProvidersDownError, ModelNotSupportedError, ProviderError } from "../providers/types.js";
 import { calculateRequestCost, roundCredits } from "../credits/pricing.js";
 import type { CreditStore } from "../credits/store.js";
 import { parseRoutingPreference } from "../routing/strategies.js";
@@ -274,6 +274,17 @@ export async function registerChatRoutes(
 
         return reply.send(result.response);
       } catch (err) {
+        if (err instanceof ModelNotSupportedError) {
+          return reply.status(400).send({
+            error: {
+              message: err.message,
+              type: "invalid_request_error",
+              code: "model_not_supported",
+              param: "model",
+            },
+          });
+        }
+
         if (err instanceof AllProvidersDownError) {
           return reply.status(503).send({
             error: {

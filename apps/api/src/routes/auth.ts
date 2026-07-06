@@ -1,8 +1,11 @@
 import type { FastifyInstance, preHandlerHookHandler } from "fastify";
 import { resolveClerkUser } from "../auth/clerk.js";
 import { extractBearerToken } from "../auth/keys.js";
-import { createSessionToken } from "../auth/session.js";
+import { createSessionToken, createSessionTokenForIdentity } from "../auth/session.js";
+import { verifySiweMessage } from "../auth/siwe.js";
 import type { ApiKeyStore } from "../auth/store.js";
+import { normalizeWalletAddress } from "../auth/wallet.js";
+import type { WalletNonceStore } from "../auth/wallet-nonce.js";
 import type { CreditStore } from "../credits/store.js";
 import { roundCredits } from "../credits/pricing.js";
 import type { RateLimitResult } from "../rate-limit.js";
@@ -18,6 +21,12 @@ interface AuthRouteDeps {
   sessionSecret: string;
   sessionTtlMs: number;
   clerkSecretKey?: string;
+  walletNonceStore: WalletNonceStore;
+  siwe: {
+    domain: string;
+    uri: string;
+    chainId: number;
+  };
 }
 
 interface CreateKeyBody {
@@ -27,6 +36,40 @@ interface CreateKeyBody {
 
 interface RevokeKeyBody {
   id?: string;
+}
+
+interface WalletNonceBody {
+  address?: string;
+}
+
+interface WalletVerifyBody {
+  message?: string;
+  signature?: string;
+}
+
+function validateWalletNonceBody(body: unknown): WalletNonceBody | string {
+  if (body === undefined || body === null || typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+  const b = body as Record<string, unknown>;
+  if (typeof b.address !== "string" || b.address.trim() === "") {
+    return "Field 'address' must be a non-empty string";
+  }
+  return { address: b.address.trim() };
+}
+
+function validateWalletVerifyBody(body: unknown): WalletVerifyBody | string {
+  if (body === undefined || body === null || typeof body !== "object") {
+    return "Request body must be a JSON object";
+  }
+  const b = body as Record<string, unknown>;
+  if (typeof b.message !== "string" || b.message.trim() === "") {
+    return "Field 'message' must be a non-empty string";
+  }
+  if (typeof b.signature !== "string" || b.signature.trim() === "") {
+    return "Field 'signature' must be a non-empty string";
+  }
+  return { message: b.message, signature: b.signature };
 }
 
 function validateCreateKeyBody(body: unknown): CreateKeyBody | string {
@@ -52,7 +95,11 @@ function validateCreateKeyBody(body: unknown): CreateKeyBody | string {
     if (typeof b.wallet !== "string" || b.wallet.trim() === "") {
       return "Field 'wallet' must be a non-empty string";
     }
-    result.wallet = b.wallet.trim();
+    try {
+      result.wallet = normalizeWalletAddress(b.wallet);
+    } catch {
+      return "Field 'wallet' must be a valid Ethereum address";
+    }
   }
 
   return result;
@@ -100,23 +147,48 @@ export async function registerAuthRoutes(
   app: FastifyInstance,
   deps: AuthRouteDeps,
 ): Promise<void> {
-  app.get<{ Querystring: { email?: string } }>(
+  app.get<{ Querystring: { email?: string; wallet?: string } }>(
     "/v1/auth/account",
     async (request, reply) => {
       const email = request.query.email?.trim();
-      if (!email) {
+      const wallet = request.query.wallet?.trim();
+
+      if (email && wallet) {
         return reply.status(400).send({
-          error: { message: "Query parameter 'email' is required", type: "invalid_request_error" },
+          error: {
+            message: "Provide either 'email' or 'wallet', not both",
+            type: "invalid_request_error",
+          },
         });
       }
 
-      const exists = await deps.store.emailHasAccount(email);
+      if (email) {
+        const exists = await deps.store.emailHasAccount(email);
+        return { object: "account", email, exists };
+      }
 
-      return {
-        object: "account",
-        email,
-        exists,
-      };
+      if (wallet) {
+        let normalized: string;
+        try {
+          normalized = normalizeWalletAddress(wallet);
+        } catch {
+          return reply.status(400).send({
+            error: {
+              message: "Invalid wallet address",
+              type: "invalid_request_error",
+            },
+          });
+        }
+        const exists = await deps.store.walletHasAccount(normalized);
+        return { object: "account", wallet: normalized, exists };
+      }
+
+      return reply.status(400).send({
+        error: {
+          message: "Query parameter 'email' or 'wallet' is required",
+          type: "invalid_request_error",
+        },
+      });
     },
   );
 
@@ -177,6 +249,128 @@ export async function registerAuthRoutes(
     });
   });
 
+  app.post<{ Body: unknown }>("/v1/auth/wallet/nonce", async (request, reply) => {
+    const clientIp = request.ip;
+    const limit = deps.keyGenRateLimit(clientIp);
+
+    if (!limit.allowed) {
+      return reply
+        .status(429)
+        .header("Retry-After", String(limit.retryAfterSec ?? 60))
+        .send({
+          error: {
+            message: `Rate limit exceeded. Try again in ${limit.retryAfterSec}s.`,
+            type: "rate_limit_error",
+          },
+        });
+    }
+
+    const validated = validateWalletNonceBody(request.body);
+    if (typeof validated === "string") {
+      return reply.status(400).send({
+        error: { message: validated, type: "invalid_request_error" },
+      });
+    }
+
+    let address: string;
+    try {
+      address = normalizeWalletAddress(validated.address!);
+    } catch {
+      return reply.status(400).send({
+        error: { message: "Invalid wallet address", type: "invalid_request_error" },
+      });
+    }
+
+    const issued = await deps.walletNonceStore.issue(address);
+
+    return reply.status(200).send({
+      object: "wallet_nonce",
+      address: issued.address,
+      nonce: issued.nonce,
+      expires_at: issued.expiresAt.toISOString(),
+      chain_id: deps.siwe.chainId,
+      domain: deps.siwe.domain,
+      uri: deps.siwe.uri,
+    });
+  });
+
+  app.post<{ Body: unknown }>("/v1/auth/wallet/verify", async (request, reply) => {
+    const clientIp = request.ip;
+    const limit = deps.keyGenRateLimit(clientIp);
+
+    if (!limit.allowed) {
+      return reply
+        .status(429)
+        .header("Retry-After", String(limit.retryAfterSec ?? 60))
+        .send({
+          error: {
+            message: `Rate limit exceeded. Try again in ${limit.retryAfterSec}s.`,
+            type: "rate_limit_error",
+          },
+        });
+    }
+
+    const validated = validateWalletVerifyBody(request.body);
+    if (typeof validated === "string") {
+      return reply.status(400).send({
+        error: { message: validated, type: "invalid_request_error" },
+      });
+    }
+
+    let address: string;
+    let nonce: string;
+    try {
+      const verified = await verifySiweMessage(
+        validated.message!,
+        validated.signature!,
+        deps.siwe,
+      );
+      address = verified.address;
+      nonce = verified.nonce;
+    } catch {
+      return reply.status(401).send({
+        error: {
+          message: "Invalid or expired wallet signature",
+          type: "authentication_error",
+        },
+      });
+    }
+
+    const nonceValid = await deps.walletNonceStore.consume(address, nonce);
+    if (!nonceValid) {
+      return reply.status(401).send({
+        error: {
+          message: "Invalid or expired wallet signature",
+          type: "authentication_error",
+        },
+      });
+    }
+
+    let record = await deps.store.findPrimaryKeyForWallet(address);
+    let createdAccount = false;
+    if (!record) {
+      const created = await deps.store.create({ wallet: address });
+      record = created.record;
+      await deps.creditStore.credit(record.id, deps.initialCreditBalance);
+      createdAccount = true;
+    }
+
+    const sessionToken = createSessionTokenForIdentity(
+      record.id,
+      { wallet: address },
+      deps.sessionSecret,
+      deps.sessionTtlMs,
+    );
+
+    return reply.status(200).send({
+      object: "session",
+      session_token: sessionToken,
+      wallet: address,
+      api_key_id: record.id,
+      created_account: createdAccount,
+    });
+  });
+
   app.post<{ Body: unknown }>("/v1/auth/key", async (request, reply) => {
     const clientIp = request.ip;
     const limit = deps.keyGenRateLimit(clientIp);
@@ -216,6 +410,44 @@ export async function registerAuthRoutes(
       currency: "USD",
     });
   });
+
+  app.post(
+    "/v1/auth/keys",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      const owner = request.apiKey!;
+
+      if (!owner.email && !owner.wallet) {
+        return reply.status(400).send({
+          error: {
+            message:
+              "This session is not linked to an email or wallet — sign in again before creating keys",
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      const input =
+        owner.email !== undefined
+          ? { email: owner.email }
+          : { wallet: owner.wallet! };
+
+      const { record, plainKey } = await deps.store.create(input);
+      await deps.creditStore.credit(record.id, deps.initialCreditBalance);
+      const balance = await deps.creditStore.getBalance(record.id);
+
+      return reply.status(201).send({
+        object: "api_key",
+        api_key: plainKey,
+        id: record.id,
+        email: record.email ?? null,
+        wallet: record.wallet ?? null,
+        created_at: record.createdAt,
+        balance: roundCredits(balance),
+        currency: "USD",
+      });
+    },
+  );
 
   app.get(
     "/v1/auth/keys",

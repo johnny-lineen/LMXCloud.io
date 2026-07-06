@@ -22,6 +22,7 @@ export interface ProviderAdapter {
   readonly costPer1kTokens: number;
   readonly isDepin: boolean;
   readonly aliases: string[];
+  supportsModel(model: string): boolean;
   chatCompletion(request: ChatCompletionRequest): Promise<ProviderResult>;
   healthCheck(): Promise<ProviderHealthResult>;
 }
@@ -46,5 +47,12 @@ export class AllProvidersDownError extends Error {
         : "All providers unavailable",
     );
     this.name = "AllProvidersDownError";
+  }
+}
+
+export class ModelNotSupportedError extends Error {
+  constructor(public readonly model: string) {
+    super(`Model "${model}" is not supported by any configured provider`);
+    this.name = "ModelNotSupportedError";
   }
 }

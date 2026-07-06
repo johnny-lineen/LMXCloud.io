@@ -1,14 +1,7 @@
 import { createOpenAiCompatibleAdapter } from "./openai-compatible.js";
+import { aliasKeys, IONET_MODEL_MAP, resolveProviderModel } from "./model-maps.js";
 
-const MODEL_MAP: Record<string, string> = {
-  "llama-3-70b": "meta-llama/Llama-3.3-70B-Instruct",
-  "llama-3.3-70b": "meta-llama/Llama-3.3-70B-Instruct",
-  "meta-llama/Llama-3.3-70B-Instruct": "meta-llama/Llama-3.3-70B-Instruct",
-  "llama-3-8b": "meta-llama/Llama-3.1-8B-Instruct",
-  "mistral-7b": "mistralai/Mistral-7B-Instruct-v0.3",
-};
-
-const ALIASES = [...new Set(Object.keys(MODEL_MAP))];
+const ALIASES = aliasKeys(IONET_MODEL_MAP);
 
 export interface IonetConfig {
   apiKey: string;
@@ -23,7 +16,7 @@ export function createIonetAdapter(config: IonetConfig) {
     isDepin: true,
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
-    resolveModel: (model) => MODEL_MAP[model] ?? model,
+    resolveModel: (model) => resolveProviderModel(IONET_MODEL_MAP, "ionet", model),
     aliases: ALIASES,
   });
 }

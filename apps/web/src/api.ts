@@ -2,11 +2,14 @@ import type {
   ApiError,
   BalanceResponse,
   CreateKeyResponse,
+  DepositInfoResponse,
+  DepositHistoryResponse,
   KeysResponse,
   LoginResponse,
   UsageHistoryResponse,
   UsageLogsResponse,
   UsageResponse,
+  WalletNonceResponse,
 } from "./types";
 
 
@@ -78,6 +81,45 @@ export async function exchangeClerkSession(clerkToken: string): Promise<LoginRes
   return res.json() as Promise<LoginResponse>;
 }
 
+export async function fetchWalletNonce(address: string): Promise<WalletNonceResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/wallet/nonce`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ address }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<WalletNonceResponse>;
+}
+
+export async function exchangeWalletSession(
+  message: string,
+  signature: string,
+): Promise<LoginResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/wallet/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, signature }),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<LoginResponse>;
+}
+
+export async function fetchDepositInfo(token: string): Promise<DepositInfoResponse> {
+  const res = await fetch(`${API_BASE}/v1/billing/deposit-info`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<DepositInfoResponse>;
+}
+
+export async function fetchDepositHistory(token: string): Promise<DepositHistoryResponse> {
+  const res = await fetch(`${API_BASE}/v1/billing/deposits`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<DepositHistoryResponse>;
+}
+
 
 
 export async function validateSession(token: string): Promise<UsageResponse> {
@@ -122,6 +164,24 @@ export async function createApiKey(email?: string): Promise<CreateKeyResponse> {
 
   return res.json() as Promise<CreateKeyResponse>;
 
+}
+
+
+
+/** Create a key linked to the signed-in account (console). */
+export async function createAccountApiKey(sessionToken: string): Promise<CreateKeyResponse> {
+  const res = await fetch(`${API_BASE}/v1/auth/keys`, {
+    method: "POST",
+    headers: {
+      ...authHeaders(sessionToken),
+      "Content-Type": "application/json",
+    },
+    body: "{}",
+  });
+
+  if (!res.ok) throw new Error(await parseError(res));
+
+  return res.json() as Promise<CreateKeyResponse>;
 }
 
 

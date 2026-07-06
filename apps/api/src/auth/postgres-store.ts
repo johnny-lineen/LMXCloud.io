@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { getPool } from "../db/pool.js";
 import { generateApiKey, hashApiKey } from "./keys.js";
+import { normalizeWalletAddress } from "./wallet.js";
 import type {
   ApiKeyRecord,
   ApiKeyStore,
@@ -38,7 +39,7 @@ export class PostgresApiKeyStore implements ApiKeyStore {
       id: crypto.randomUUID(),
       keyHash: hashApiKey(plainKey),
       email: input.email,
-      wallet: input.wallet,
+      wallet: input.wallet ? normalizeWalletAddress(input.wallet) : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -96,6 +97,20 @@ export class PostgresApiKeyStore implements ApiKeyStore {
     return row ? rowToRecord(row) : null;
   }
 
+  async findPrimaryKeyForWallet(wallet: string): Promise<ApiKeyRecord | null> {
+    const result = await getPool().query<ApiKeyRow>(
+      `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
+       FROM api_keys
+       WHERE LOWER(wallet) = LOWER($1) AND revoked_at IS NULL
+       ORDER BY last_used_at DESC NULLS LAST, created_at DESC
+       LIMIT 1`,
+      [wallet.trim()],
+    );
+
+    const row = result.rows[0];
+    return row ? rowToRecord(row) : null;
+  }
+
   async touchLastUsed(id: string): Promise<void> {
     await getPool().query(
       `UPDATE api_keys SET last_used_at = NOW() WHERE id = $1 AND revoked_at IS NULL`,
@@ -110,7 +125,7 @@ export class PostgresApiKeyStore implements ApiKeyStore {
       result = await getPool().query<ApiKeyRow>(
         `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
          FROM api_keys
-         WHERE email = $1 AND revoked_at IS NULL
+         WHERE LOWER(email) = LOWER($1) AND revoked_at IS NULL
          ORDER BY created_at DESC`,
         [record.email],
       );
@@ -118,7 +133,7 @@ export class PostgresApiKeyStore implements ApiKeyStore {
       result = await getPool().query<ApiKeyRow>(
         `SELECT id, key_hash, email, wallet, created_at, last_used_at, revoked_at
          FROM api_keys
-         WHERE wallet = $1 AND revoked_at IS NULL
+         WHERE LOWER(wallet) = LOWER($1) AND revoked_at IS NULL
          ORDER BY created_at DESC`,
         [record.wallet],
       );
@@ -155,6 +170,17 @@ export class PostgresApiKeyStore implements ApiKeyStore {
          WHERE LOWER(email) = LOWER($1) AND revoked_at IS NULL
        ) AS exists`,
       [email.trim()],
+    );
+    return result.rows[0]?.exists ?? false;
+  }
+
+  async walletHasAccount(wallet: string): Promise<boolean> {
+    const result = await getPool().query<{ exists: boolean }>(
+      `SELECT EXISTS(
+         SELECT 1 FROM api_keys
+         WHERE LOWER(wallet) = LOWER($1) AND revoked_at IS NULL
+       ) AS exists`,
+      [wallet.trim()],
     );
     return result.rows[0]?.exists ?? false;
   }

@@ -8,8 +8,8 @@ The core is real: multi-provider routing with fallback, health monitoring, per-k
 
 Two things found in the audit that should jump the queue:
 
-1. **Login is email-only, no verification.** `POST /v1/auth/login` in `apps/api/src/routes/auth.ts` issues a valid session token to anyone who submits an email address that has an account — no password, no magic link, no OTP. Right now, anyone who knows (or guesses) a beta user's email can log into their dashboard and see their keys, usage, and balance. This has to close before you send the signup link to anyone you don't personally trust.
-2. **Nothing is deployed yet.** DEPLOY.md is written but unexecuted — API keys and data currently live only on your machine. Every day this stays local is a day you can't send anyone a link.
+1. ~~**Login is email-only, no verification.**~~ **RESOLVED (2026-07-05):** Auth migrated to Clerk (`@clerk/clerk-react`) — email verification is handled by Clerk, not custom code. `SignInPage`/`SignUpPage`/`AuthContext` gate on `clerkSignedIn`. Worth double-checking the API actually verifies Clerk sessions server-side, not just the frontend.
+2. ~~**Nothing is deployed yet.**~~ **RESOLVED (2026-07-05):** Deployed.
 
 ## Week 1 — Deploy for real, close the security gap
 
@@ -27,6 +27,7 @@ Two things found in the audit that should jump the queue:
 - **Expand model coverage.** Only `llama-3-70b` is aliased today. Add 2-3 more popular models across whichever providers are live (io.net, AkashML) so the router looks like infrastructure, not a single-model demo.
 - **Polish the signup → key → first request flow** in `apps/web` and `apps/demo`. Walk through it yourself as a stranger would: confusing error states, unclear balance/cost display, or a broken step here will lose people before they see the product work.
 - **Public status page.** You already compute provider health for `/v1/status` — surface it as a simple public page. For a DePIN pitch, visible uptime/fallback transparency is part of the trust story, not just an internal debugging tool.
+- **Per-request logs in the console (added 2026-07-05).** `usage_events` already records provider/model/latency/cost/fallback per call, but nothing surfaces individual requests — only aggregated day buckets. Add a `/v1/usage/logs` endpoint and a Logs page in the dashboard so a developer can see each call, which provider it routed to, and its latency, not just daily totals.
 
 ## Week 3 — Trust and support basics
 

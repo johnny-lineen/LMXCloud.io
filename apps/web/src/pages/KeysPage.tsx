@@ -1,5 +1,17 @@
+import { KeyRound, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { createApiKey, fetchKeys, revokeApiKey } from "../api";
+import { AlertBanner } from "../components/console/AlertBanner";
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableRow,
+  DataTableTh,
+} from "../components/console/DataTable";
+import { PageHeader } from "../components/console/PageHeader";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
@@ -73,37 +85,35 @@ export function KeysPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h2 className="text-headline-md text-on-surface">API Keys</h2>
-          <p className="mt-1 text-body-sm text-on-surface-muted">
-            Manage keys linked to {email || "your account"}.
-          </p>
-        </div>
-        <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
-          {creating ? "Creating…" : "Create new key"}
-        </Button>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Credentials"
+        title="API Keys"
+        description={`Manage keys linked to ${email || "your account"}. Keys authenticate inference requests.`}
+        actions={
+          <Button type="button" onClick={() => void handleCreate()} disabled={creating}>
+            <Plus className="h-4 w-4" strokeWidth={1.75} />
+            {creating ? "Creating…" : "Create key"}
+          </Button>
+        }
+      />
 
-      {error && (
-        <p className="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-body-sm text-error">
-          {error}
-        </p>
-      )}
+      {error && <AlertBanner tone="error">{error}</AlertBanner>}
 
       {newKey && (
         <Card accent="success">
-          <p className="text-body-sm font-medium text-success">New key created</p>
-          <code className="mt-2 block break-all text-mono-sm text-on-surface">{newKey}</code>
-          <p className="mt-2 text-body-sm text-on-surface-muted">
+          <p className="text-label-sm text-success">New key created</p>
+          <code className="mt-3 block break-all rounded-md border border-border bg-background px-4 py-3 text-mono-sm text-on-surface">
+            {newKey}
+          </code>
+          <p className="mt-3 text-body-sm text-on-surface-muted">
             Copy this key now. It won&apos;t be shown again.
           </p>
           <Button
             type="button"
             variant="secondary"
             size="sm"
-            className="mt-3"
+            className="mt-4"
             onClick={() => void retrySession()}
           >
             Refresh session
@@ -111,70 +121,66 @@ export function KeysPage() {
         </Card>
       )}
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        <table className="w-full text-left text-body-sm">
-          <thead className="border-b border-border text-label-sm text-on-surface-muted">
-            <tr>
-              <th className="px-4 py-3">Key</th>
-              <th className="px-4 py-3">Balance</th>
-              <th className="px-4 py-3">Requests</th>
-              <th className="px-4 py-3">Tokens</th>
-              <th className="px-4 py-3">Last used</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-on-surface-muted">
-                  Loading keys…
-                </td>
-              </tr>
-            ) : keys.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-on-surface-muted">
-                  No keys found.
-                </td>
-              </tr>
-            ) : (
-              keys.map((key) => (
-                <tr key={key.id} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-3">
-                    <div className="text-mono-sm text-on-surface">
-                      {key.id.slice(0, 8)}…
-                    </div>
-                    {key.is_current && (
-                      <Chip tone="primary" className="mt-1">
-                        current session
-                      </Chip>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-mono-sm text-success">
-                    {formatUsd(key.balance)}
-                  </td>
-                  <td className="px-4 py-3 text-mono-sm">{formatNumber(key.usage.requests)}</td>
-                  <td className="px-4 py-3 text-mono-sm">{formatNumber(key.usage.total_tokens)}</td>
-                  <td className="px-4 py-3 text-on-surface-muted">
-                    {formatDateTime(key.last_used_at)}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      disabled={revokingId === key.id}
-                      onClick={() => void handleRevoke(key)}
-                      className="border-error/40 text-error hover:bg-error/10 hover:border-error"
-                    >
-                      {revokingId === key.id ? "…" : "Revoke"}
-                    </Button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Your keys"
+        description="Each key has its own balance and usage counters."
+      >
+        <DataTableHead>
+          <tr>
+            <DataTableTh>Key</DataTableTh>
+            <DataTableTh>Balance</DataTableTh>
+            <DataTableTh>Requests</DataTableTh>
+            <DataTableTh>Tokens</DataTableTh>
+            <DataTableTh>Last used</DataTableTh>
+            <DataTableTh className="text-right">Actions</DataTableTh>
+          </tr>
+        </DataTableHead>
+        <DataTableBody>
+          {loading ? (
+            <DataTableEmpty colSpan={6}>Loading keys…</DataTableEmpty>
+          ) : keys.length === 0 ? (
+            <DataTableEmpty colSpan={6}>
+              <div className="flex flex-col items-center gap-2">
+                <KeyRound className="h-8 w-8 text-on-surface-faint" strokeWidth={1.5} />
+                <p>No keys found. Create one to get started.</p>
+              </div>
+            </DataTableEmpty>
+          ) : (
+            keys.map((key) => (
+              <DataTableRow key={key.id}>
+                <DataTableCell mono>
+                  <div className="text-on-surface">{key.id.slice(0, 8)}…</div>
+                  {key.is_current && (
+                    <Chip tone="primary" className="mt-1.5">
+                      current session
+                    </Chip>
+                  )}
+                </DataTableCell>
+                <DataTableCell mono className="text-success">
+                  {formatUsd(key.balance)}
+                </DataTableCell>
+                <DataTableCell mono>{formatNumber(key.usage.requests)}</DataTableCell>
+                <DataTableCell mono>{formatNumber(key.usage.total_tokens)}</DataTableCell>
+                <DataTableCell className="text-on-surface-muted">
+                  {formatDateTime(key.last_used_at)}
+                </DataTableCell>
+                <DataTableCell className="text-right">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={revokingId === key.id}
+                    onClick={() => void handleRevoke(key)}
+                    className="border-error/40 text-error hover:border-error hover:bg-error/10"
+                  >
+                    {revokingId === key.id ? "…" : "Revoke"}
+                  </Button>
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
     </div>
   );
 }

@@ -53,6 +53,30 @@ export interface UsageHistoryResponse {
   data: UsageHistoryBucket[];
 }
 
+export interface UsageLogEntry {
+  id: string;
+  created_at: string;
+  api_key_id: string;
+  route: string;
+  provider: string;
+  model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens: number;
+  cost: number;
+  latency_ms: number;
+  fallback_used: boolean;
+  status: number;
+}
+
+export interface UsageLogsResponse {
+  object: string;
+  days: number | null;
+  data: UsageLogEntry[];
+  has_more: boolean;
+  next_cursor: string | null;
+}
+
 export interface BalanceResponse {
   object: string;
   api_key_id: string;

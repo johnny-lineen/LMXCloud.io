@@ -1,48 +1,33 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
-import { Chip } from "./ui/Chip";
 import { cn } from "../lib/cn";
 
 interface StatCardProps {
   label: string;
   value: string;
   hint?: string;
-  tone?: "default" | "accent" | "warn";
+  tone?: "default" | "primary" | "success" | "info" | "warning";
 }
 
-const accentHairline: Record<NonNullable<StatCardProps["tone"]>, string | null> = {
+const hairlineTone: Record<NonNullable<StatCardProps["tone"]>, string | null> = {
   default: null,
-  accent: "bg-success",
-  warn: "bg-warning",
+  primary: "bg-primary",
+  success: "bg-success",
+  info: "bg-info",
+  warning: "bg-warning",
 };
 
 export function StatCard({ label, value, hint, tone = "default" }: StatCardProps) {
-  const hairline = accentHairline[tone];
-  const showTrend = tone === "accent" || tone === "warn";
+  const hairline = hairlineTone[tone];
 
   return (
-    <div className="relative overflow-hidden rounded-lg border border-border bg-surface p-5">
+    <div className="relative flex min-h-[7rem] flex-col overflow-hidden rounded-lg border border-border bg-surface px-5 py-4 transition-colors duration-base ease-standard hover:border-border-strong">
       {hairline && (
         <div className={cn("absolute inset-x-0 top-0 h-0.5", hairline)} aria-hidden />
       )}
       <p className="text-label-sm text-on-surface-muted">{label}</p>
-      <p className="mt-2 text-metric text-on-surface">{value}</p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        {showTrend && (
-          <Chip
-            tone={tone === "accent" ? "success" : "warning"}
-            icon={
-              tone === "accent" ? (
-                <ArrowUp className="h-3 w-3" strokeWidth={1.75} />
-              ) : (
-                <ArrowDown className="h-3 w-3" strokeWidth={1.75} />
-              )
-            }
-          >
-            {tone === "accent" ? "Positive" : "Spend"}
-          </Chip>
-        )}
-        {hint && <p className="text-body-sm text-on-surface-faint">{hint}</p>}
-      </div>
+      <p className="mt-2.5 text-metric text-on-surface">{value}</p>
+      {hint && (
+        <p className="mt-auto pt-2.5 text-body-sm leading-snug text-on-surface-faint">{hint}</p>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { AuthCallbackPage } from "./pages/AuthCallbackPage";
 import { BillingPage } from "./pages/BillingPage";
 import { KeysPage } from "./pages/KeysPage";
 import { LandingPage } from "./pages/LandingPage";
+import { LogsPage } from "./pages/LogsPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { SignInPage } from "./pages/SignInPage";
 import { SignUpPage } from "./pages/SignUpPage";
@@ -62,6 +63,7 @@ function AppRoutes() {
         <Route path="overview" element={<OverviewPage />} />
         <Route path="keys" element={<KeysPage />} />
         <Route path="usage" element={<UsagePage />} />
+        <Route path="logs" element={<LogsPage />} />
         <Route path="billing" element={<BillingPage />} />
       </Route>
       <Route path="/login" element={<Navigate to="/sign-in" replace />} />
@@ -69,6 +71,7 @@ function AppRoutes() {
       <Route path="/overview" element={<Navigate to="/console/overview" replace />} />
       <Route path="/keys" element={<Navigate to="/console/keys" replace />} />
       <Route path="/usage" element={<Navigate to="/console/usage" replace />} />
+      <Route path="/logs" element={<Navigate to="/console/logs" replace />} />
       <Route path="/billing" element={<Navigate to="/console/billing" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

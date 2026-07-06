@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchBalance, fetchKeys, topUpCredits } from "../api";
+import { AlertBanner } from "../components/console/AlertBanner";
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableRow,
+  DataTableTh,
+} from "../components/console/DataTable";
+import { PageHeader } from "../components/console/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { Chip } from "../components/ui/Chip";
 import { useAuth } from "../context/AuthContext";
 import { formatUsd } from "../lib/format";
 import type { ApiKeyInfo } from "../types";
@@ -61,47 +73,42 @@ export function BillingPage() {
   const currentKey = keys.find((key) => key.is_current);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-headline-md text-on-surface">Billing</h2>
-        <p className="mt-1 text-body-sm text-on-surface-muted">
-          Credit balances and top-ups for your API keys.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Account"
+        title="Billing"
+        description="Credit balances and top-ups for your API keys."
+      />
 
-      {error && (
-        <p className="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-body-sm text-error">
-          {error}
-        </p>
-      )}
-
-      {success && (
-        <p className="rounded-md border border-success/30 bg-success/10 px-4 py-3 text-body-sm text-success">
-          {success}
-        </p>
-      )}
+      {error && <AlertBanner tone="error">{error}</AlertBanner>}
+      {success && <AlertBanner tone="success">{success}</AlertBanner>}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <StatCard
           label="Session key balance"
           value={loading ? "…" : formatUsd(sessionBalance ?? 0)}
-          tone="accent"
+          tone="success"
           hint={currentKey ? `Key ${currentKey.id.slice(0, 8)}…` : undefined}
         />
         <StatCard
           label="Total account balance"
           value={loading ? "…" : formatUsd(totalBalance)}
+          tone="primary"
           hint="Across all linked keys"
         />
       </div>
 
-      <Card>
-        <h3 className="text-label-sm text-on-surface-muted">Top up session key</h3>
+      <Card accent="info">
+        <p className="text-label-sm text-info">Dev top-up</p>
+        <h3 className="mt-2 text-title-md text-on-surface">Add credits to session key</h3>
         <p className="mt-2 text-body-sm text-on-surface-muted">
-          Dev mode only — requires{" "}
-          <code className="text-mono-sm">CREDITS_ALLOW_SELF_TOPUP=true</code> on the API.
+          Development mode only — requires{" "}
+          <code className="rounded border border-border bg-background px-1.5 py-0.5 text-mono-sm">
+            CREDITS_ALLOW_SELF_TOPUP=true
+          </code>{" "}
+          on the API.
         </p>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-5 flex flex-wrap gap-2">
           {TOP_UP_AMOUNTS.map((amount) => (
             <Button
               key={amount}
@@ -116,44 +123,41 @@ export function BillingPage() {
         </div>
       </Card>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        <table className="w-full text-left text-body-sm">
-          <thead className="border-b border-border text-label-sm text-on-surface-muted">
-            <tr>
-              <th className="px-4 py-3">Key</th>
-              <th className="px-4 py-3">Balance</th>
-              <th className="px-4 py-3">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={3} className="px-4 py-8 text-center text-on-surface-muted">
-                  Loading balances…
-                </td>
-              </tr>
-            ) : (
-              keys.map((key) => (
-                <tr key={key.id} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-3 text-mono-sm">{key.id.slice(0, 8)}…</td>
-                  <td className="px-4 py-3 text-mono-sm text-success">
-                    {formatUsd(key.balance)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {key.balance < 0.01 ? (
-                      <span className="text-warning">Low balance</span>
-                    ) : key.is_current ? (
-                      <span className="text-primary">Current session</span>
-                    ) : (
-                      <span className="text-on-surface-muted">Active</span>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Key balances"
+        description="Per-key credit balances on your account."
+      >
+        <DataTableHead>
+          <tr>
+            <DataTableTh>Key</DataTableTh>
+            <DataTableTh>Balance</DataTableTh>
+            <DataTableTh>Status</DataTableTh>
+          </tr>
+        </DataTableHead>
+        <DataTableBody>
+          {loading ? (
+            <DataTableEmpty colSpan={3}>Loading balances…</DataTableEmpty>
+          ) : (
+            keys.map((key) => (
+              <DataTableRow key={key.id}>
+                <DataTableCell mono>{key.id.slice(0, 8)}…</DataTableCell>
+                <DataTableCell mono className="text-success">
+                  {formatUsd(key.balance)}
+                </DataTableCell>
+                <DataTableCell>
+                  {key.balance < 0.01 ? (
+                    <Chip tone="warning">Low balance</Chip>
+                  ) : key.is_current ? (
+                    <Chip tone="primary">Current session</Chip>
+                  ) : (
+                    <Chip tone="success">Active</Chip>
+                  )}
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
     </div>
   );
 }

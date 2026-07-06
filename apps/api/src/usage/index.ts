@@ -21,4 +21,4 @@ export function createUsageStore(): UsageStore {
   return new FileUsageStore(dataPath, eventsPath);
 }
 
-export type { KeyUsageStats, RecordUsageInput, UsageDayBucket, UsageStore } from "./store.js";
+export type { KeyUsageStats, RecordUsageInput, UsageDayBucket, UsageLogEntry, UsageLogsResult, UsageStore } from "./store.js";

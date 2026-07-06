@@ -12,13 +12,21 @@ import type {
 
   UsageHistoryResponse,
 
+  UsageLogsResponse,
+
   UsageResponse,
 
 } from "./types";
 
 
 
-export const API_BASE = import.meta.env.VITE_API_URL ?? "http://localhost:3000";
+function normalizeApiBase(url: string | undefined): string {
+  const trimmed = (url ?? "http://localhost:3000").trim().replace(/\/$/, "");
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+export const API_BASE = normalizeApiBase(import.meta.env.VITE_API_URL);
 
 
 
@@ -69,7 +77,11 @@ export async function checkAccountExists(email: string): Promise<boolean> {
 export async function exchangeClerkSession(clerkToken: string): Promise<LoginResponse> {
   const res = await fetch(`${API_BASE}/v1/auth/clerk`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${clerkToken}` },
+    headers: {
+      Authorization: `Bearer ${clerkToken}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<LoginResponse>;
@@ -220,6 +232,40 @@ export async function fetchUsageHistory(
   if (!res.ok) throw new Error(await parseError(res));
 
   return res.json() as Promise<UsageHistoryResponse>;
+
+}
+
+
+
+export async function fetchUsageLogs(
+
+  token: string,
+
+  options: { limit?: number; cursor?: string; days?: number } = {},
+
+): Promise<UsageLogsResponse> {
+
+  const params = new URLSearchParams();
+
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+
+  if (options.cursor) params.set("cursor", options.cursor);
+
+  if (options.days !== undefined) params.set("days", String(options.days));
+
+  const query = params.toString();
+
+  const res = await fetch(
+
+    `${API_BASE}/v1/usage/logs${query ? `?${query}` : ""}`,
+
+    { headers: authHeaders(token) },
+
+  );
+
+  if (!res.ok) throw new Error(await parseError(res));
+
+  return res.json() as Promise<UsageLogsResponse>;
 
 }
 

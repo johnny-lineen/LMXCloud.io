@@ -1,5 +1,13 @@
 import { getPool } from "../db/pool.js";
-import type { KeyUsageStats, RecordUsageInput, UsageDayBucket, UsageStore } from "./store.js";
+import type {
+  KeyUsageStats,
+  RecordUsageInput,
+  UsageDayBucket,
+  UsageLogEntry,
+  UsageLogsQuery,
+  UsageLogsResult,
+  UsageStore,
+} from "./store.js";
 
 export class PostgresUsageStore implements UsageStore {
   async recordUsage(input: RecordUsageInput): Promise<void> {
@@ -100,5 +108,78 @@ export class PostgresUsageStore implements UsageStore {
       totalTokens: Number(row.total_tokens),
       cost: Number(row.cost),
     }));
+  }
+
+  async getUsageLogs(apiKeyIds: string[], query: UsageLogsQuery): Promise<UsageLogsResult> {
+    if (apiKeyIds.length === 0) {
+      return { data: [], hasMore: false, nextCursor: null };
+    }
+
+    const params: unknown[] = [apiKeyIds];
+    const filters = ["api_key_id = ANY($1::uuid[])"];
+
+    if (query.days !== undefined) {
+      params.push(query.days);
+      filters.push(`created_at >= NOW() - ($${params.length}::int || ' days')::interval`);
+    }
+
+    if (query.cursor) {
+      params.push(query.cursor);
+      filters.push(
+        `(created_at, id) < (
+          SELECT created_at, id FROM usage_events WHERE id = $${params.length}::uuid
+        )`,
+      );
+    }
+
+    params.push(query.limit + 1);
+    const limitParam = `$${params.length}`;
+
+    const result = await getPool().query<{
+      id: string;
+      api_key_id: string;
+      provider: string;
+      model: string;
+      prompt_tokens: number;
+      completion_tokens: number;
+      total_tokens: number;
+      cost: string;
+      latency_ms: number | null;
+      fallback_used: boolean;
+      created_at: Date;
+    }>(
+      `SELECT
+         id, api_key_id, provider, model,
+         prompt_tokens, completion_tokens, total_tokens,
+         cost, latency_ms, fallback_used, created_at
+       FROM usage_events
+       WHERE ${filters.join(" AND ")}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ${limitParam}`,
+      params,
+    );
+
+    const hasMore = result.rows.length > query.limit;
+    const rows = hasMore ? result.rows.slice(0, query.limit) : result.rows;
+
+    return {
+      data: rows.map((row): UsageLogEntry => ({
+        id: row.id,
+        apiKeyId: row.api_key_id,
+        route: "/v1/chat/completions",
+        provider: row.provider,
+        model: row.model,
+        promptTokens: row.prompt_tokens,
+        completionTokens: row.completion_tokens,
+        totalTokens: row.total_tokens,
+        cost: Number(row.cost),
+        latencyMs: row.latency_ms ?? 0,
+        fallbackUsed: row.fallback_used,
+        status: 200,
+        createdAt: row.created_at.toISOString(),
+      })),
+      hasMore,
+      nextCursor: hasMore ? (rows[rows.length - 1]?.id ?? null) : null,
+    };
   }
 }

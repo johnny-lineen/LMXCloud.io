@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import fs from "fs/promises";
 import path from "path";
 
@@ -30,13 +31,43 @@ export interface UsageDayBucket {
   cost: number;
 }
 
+export interface UsageLogEntry {
+  id: string;
+  apiKeyId: string;
+  route: string;
+  provider: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number;
+  latencyMs: number;
+  fallbackUsed: boolean;
+  status: number;
+  createdAt: string;
+}
+
+export interface UsageLogsQuery {
+  limit: number;
+  cursor?: string;
+  days?: number;
+}
+
+export interface UsageLogsResult {
+  data: UsageLogEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export interface UsageStore {
   recordUsage(input: RecordUsageInput): Promise<void>;
   getUsage(apiKeyId: string): Promise<KeyUsageStats | null>;
   getUsageHistory(apiKeyIds: string[], days: number): Promise<UsageDayBucket[]>;
+  getUsageLogs(apiKeyIds: string[], query: UsageLogsQuery): Promise<UsageLogsResult>;
 }
 
 interface UsageEvent {
+  id: string;
   apiKeyId: string;
   provider: string;
   model: string;
@@ -75,7 +106,20 @@ export class FileUsageStore implements UsageStore {
 
     try {
       const raw = await fs.readFile(this.eventsPath, "utf-8");
-      this.events = JSON.parse(raw) as UsageEvent[];
+      const parsed = JSON.parse(raw) as Array<Partial<UsageEvent>>;
+      this.events = parsed.map((event) => ({
+        id: event.id ?? crypto.randomUUID(),
+        apiKeyId: event.apiKeyId!,
+        provider: event.provider!,
+        model: event.model!,
+        promptTokens: event.promptTokens ?? 0,
+        completionTokens: event.completionTokens ?? 0,
+        totalTokens: event.totalTokens ?? 0,
+        cost: event.cost ?? 0,
+        latencyMs: event.latencyMs ?? 0,
+        fallbackUsed: event.fallbackUsed ?? false,
+        createdAt: event.createdAt!,
+      }));
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
         throw err;
@@ -120,6 +164,7 @@ export class FileUsageStore implements UsageStore {
     this.stats.set(input.apiKeyId, updated);
 
     this.events.push({
+      id: crypto.randomUUID(),
       apiKeyId: input.apiKeyId,
       provider: input.provider,
       model: input.model,
@@ -177,4 +222,59 @@ export class FileUsageStore implements UsageStore {
 
     return [...buckets.values()].sort((a, b) => a.date.localeCompare(b.date));
   }
+
+  async getUsageLogs(apiKeyIds: string[], query: UsageLogsQuery): Promise<UsageLogsResult> {
+    await this.ensureLoaded();
+
+    const keySet = new Set(apiKeyIds);
+    const cutoff =
+      query.days !== undefined ? Date.now() - query.days * 86_400_000 : null;
+
+    let filtered = this.events.filter((event) => {
+      if (!keySet.has(event.apiKeyId)) return false;
+      if (cutoff !== null && Date.parse(event.createdAt) < cutoff) return false;
+      return true;
+    });
+
+    filtered.sort((a, b) => {
+      const timeDiff = Date.parse(b.createdAt) - Date.parse(a.createdAt);
+      if (timeDiff !== 0) return timeDiff;
+      return b.id.localeCompare(a.id);
+    });
+
+    if (query.cursor) {
+      const cursorIndex = filtered.findIndex((event) => event.id === query.cursor);
+      if (cursorIndex >= 0) {
+        filtered = filtered.slice(cursorIndex + 1);
+      }
+    }
+
+    const page = filtered.slice(0, query.limit);
+    const hasMore = filtered.length > query.limit;
+    const nextCursor = hasMore ? (page[page.length - 1]?.id ?? null) : null;
+
+    return {
+      data: page.map(toUsageLogEntry),
+      hasMore,
+      nextCursor,
+    };
+  }
+}
+
+function toUsageLogEntry(event: UsageEvent): UsageLogEntry {
+  return {
+    id: event.id,
+    apiKeyId: event.apiKeyId,
+    route: "/v1/chat/completions",
+    provider: event.provider,
+    model: event.model,
+    promptTokens: event.promptTokens,
+    completionTokens: event.completionTokens,
+    totalTokens: event.totalTokens,
+    cost: event.cost,
+    latencyMs: event.latencyMs,
+    fallbackUsed: event.fallbackUsed,
+    status: 200,
+    createdAt: event.createdAt,
+  };
 }

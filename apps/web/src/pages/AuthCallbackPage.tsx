@@ -40,7 +40,7 @@ export function AuthCallbackPage() {
           <p className="mt-3 text-body-sm text-on-surface-muted">
             {error.toLowerCase().includes("rate limit")
               ? "Too many requests from this IP. Restart the API (pnpm dev) to clear the dev rate limit, or wait for the window to reset."
-              : "Make sure the API is running (pnpm dev) and CLERK_SECRET_KEY is set in the root .env, then restart the API."}
+              : "Check VITE_API_URL on Vercel (must start with https:// and point to Railway), CLERK_SECRET_KEY on Railway, then redeploy both."}
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <Button type="button" onClick={() => void retrySession()}>

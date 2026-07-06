@@ -1,6 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { fetchUsageHistory } from "../api";
 import { BarChart } from "../components/BarChart";
+import { AlertBanner } from "../components/console/AlertBanner";
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableEmpty,
+  DataTableHead,
+  DataTableRow,
+  DataTableTh,
+} from "../components/console/DataTable";
+import { PageHeader } from "../components/console/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { Tabs } from "../components/ui/Tabs";
 import { useAuth } from "../context/AuthContext";
@@ -42,40 +53,38 @@ export function UsagePage() {
   const totalCost = buckets.reduce((sum, bucket) => sum + bucket.cost, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-headline-md text-on-surface">Usage</h2>
-          <p className="mt-1 text-body-sm text-on-surface-muted">
-            Account-wide inference activity across all linked keys.
-          </p>
-        </div>
-        <Tabs
-          items={RANGE_OPTIONS.map((o) => ({ value: String(o.days), label: o.label }))}
-          value={String(days)}
-          onChange={(value) => setDays(Number(value) as 7 | 30)}
-        />
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        eyebrow="Monitor"
+        title="Usage"
+        description="Account-wide inference activity across all linked keys."
+        actions={
+          <Tabs
+            items={RANGE_OPTIONS.map((o) => ({ value: String(o.days), label: o.label }))}
+            value={String(days)}
+            onChange={(value) => setDays(Number(value) as 7 | 30)}
+          />
+        }
+      />
 
-      {error && (
-        <p className="rounded-md border border-error/30 bg-error/10 px-4 py-3 text-body-sm text-error">
-          {error}
-        </p>
-      )}
+      {error && <AlertBanner tone="error">{error}</AlertBanner>}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
           label={`Requests (${days}d)`}
           value={loading ? "…" : formatNumber(totalRequests)}
+          tone="info"
         />
         <StatCard
           label={`Tokens (${days}d)`}
           value={loading ? "…" : formatNumber(totalTokens)}
+          tone="primary"
         />
         <StatCard
           label={`Spend (${days}d)`}
           value={loading ? "…" : formatUsd(totalCost)}
-          tone="warn"
+          tone="warning"
+          hint="USD deducted from balances"
         />
       </div>
 
@@ -94,46 +103,41 @@ export function UsagePage() {
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border bg-surface">
-        <table className="w-full text-left text-body-sm">
-          <thead className="border-b border-border text-label-sm text-on-surface-muted">
-            <tr>
-              <th className="px-4 py-3">Date</th>
-              <th className="px-4 py-3">Requests</th>
-              <th className="px-4 py-3">Prompt tokens</th>
-              <th className="px-4 py-3">Completion tokens</th>
-              <th className="px-4 py-3">Cost</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-on-surface-muted">
-                  Loading usage…
-                </td>
-              </tr>
-            ) : buckets.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-on-surface-muted">
-                  No usage in this period. Send inference requests to populate charts.
-                </td>
-              </tr>
-            ) : (
-              [...buckets].reverse().map((bucket) => (
-                <tr key={bucket.date} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-3 text-mono-sm">{bucket.date}</td>
-                  <td className="px-4 py-3 text-mono-sm">{bucket.requests}</td>
-                  <td className="px-4 py-3 text-mono-sm">{formatNumber(bucket.prompt_tokens)}</td>
-                  <td className="px-4 py-3 text-mono-sm">{formatNumber(bucket.completion_tokens)}</td>
-                  <td className="px-4 py-3 text-mono-sm text-warning">
-                    {formatUsd(bucket.cost)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        title="Daily breakdown"
+        description={`Aggregated usage per UTC day for the last ${days} days.`}
+      >
+        <DataTableHead>
+          <tr>
+            <DataTableTh>Date</DataTableTh>
+            <DataTableTh>Requests</DataTableTh>
+            <DataTableTh>Prompt tokens</DataTableTh>
+            <DataTableTh>Completion tokens</DataTableTh>
+            <DataTableTh>Cost</DataTableTh>
+          </tr>
+        </DataTableHead>
+        <DataTableBody>
+          {loading ? (
+            <DataTableEmpty colSpan={5}>Loading usage…</DataTableEmpty>
+          ) : buckets.length === 0 ? (
+            <DataTableEmpty colSpan={5}>
+              No usage in this period. Send inference requests to populate charts.
+            </DataTableEmpty>
+          ) : (
+            [...buckets].reverse().map((bucket) => (
+              <DataTableRow key={bucket.date}>
+                <DataTableCell mono>{bucket.date}</DataTableCell>
+                <DataTableCell mono>{bucket.requests}</DataTableCell>
+                <DataTableCell mono>{formatNumber(bucket.prompt_tokens)}</DataTableCell>
+                <DataTableCell mono>{formatNumber(bucket.completion_tokens)}</DataTableCell>
+                <DataTableCell mono className="text-warning">
+                  {formatUsd(bucket.cost)}
+                </DataTableCell>
+              </DataTableRow>
+            ))
+          )}
+        </DataTableBody>
+      </DataTable>
     </div>
   );
 }

@@ -22,7 +22,13 @@ export function formatDateTime(iso: string | null): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    second: "2-digit",
   });
+}
+
+export function formatLatency(ms: number): string {
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${ms}ms`;
 }
 
 export function maskKey(key: string): string {

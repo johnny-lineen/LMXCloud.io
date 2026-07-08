@@ -666,7 +666,7 @@ data: {
                 <code className="text-mono-sm">docs/x402-pricing.md</code>.
               </p>
               <div className="mt-4">
-                <CodeBlock language="bash">
+                <CodeBlock title="curl">
                   {`curl ${EXAMPLE_BASE}/v1/pricing?model=llama-3-70b&max_tokens=512`}
                 </CodeBlock>
               </div>
@@ -678,7 +678,7 @@ data: {
                 header. API-key balance billing continues to work unchanged.
               </p>
               <div className="mt-4">
-                <CodeBlock language="bash">
+                <CodeBlock title="curl (x402 probe)">
                   {`# Expect 402 with payment instructions\ncurl -i -X POST ${EXAMPLE_BASE}/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"llama-3-70b","messages":[{"role":"user","content":"hi"}]}'`}
                 </CodeBlock>
               </div>

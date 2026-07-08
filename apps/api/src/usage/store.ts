@@ -12,7 +12,9 @@ export interface KeyUsageStats {
 }
 
 export interface RecordUsageInput {
-  apiKeyId: string;
+  apiKeyId?: string;
+  payerWallet?: string;
+  paymentEventId?: string;
   provider: string;
   model: string;
   promptTokens: number;
@@ -60,7 +62,7 @@ export interface UsageLogsResult {
 }
 
 export interface UsageStore {
-  recordUsage(input: RecordUsageInput): Promise<void>;
+  recordUsage(input: RecordUsageInput): Promise<string | null>;
   getUsage(apiKeyId: string): Promise<KeyUsageStats | null>;
   getUsageHistory(apiKeyIds: string[], days: number): Promise<UsageDayBucket[]>;
   getUsageLogs(apiKeyIds: string[], query: UsageLogsQuery): Promise<UsageLogsResult>;
@@ -144,28 +146,30 @@ export class FileUsageStore implements UsageStore {
     await fs.writeFile(this.eventsPath, JSON.stringify(this.events, null, 2), "utf-8");
   }
 
-  async recordUsage(input: RecordUsageInput): Promise<void> {
+  async recordUsage(input: RecordUsageInput): Promise<string | null> {
     await this.ensureLoaded();
 
-    const existing = this.stats.get(input.apiKeyId);
     const promptTokens = input.promptTokens;
     const completionTokens = input.completionTokens;
 
-    const updated: KeyUsageStats = {
-      apiKeyId: input.apiKeyId,
-      requestCount: (existing?.requestCount ?? 0) + 1,
-      promptTokens: (existing?.promptTokens ?? 0) + promptTokens,
-      completionTokens: (existing?.completionTokens ?? 0) + completionTokens,
-      totalTokens:
-        (existing?.totalTokens ?? 0) + promptTokens + completionTokens,
-      lastRequestAt: new Date().toISOString(),
-    };
+    if (input.apiKeyId) {
+      const existing = this.stats.get(input.apiKeyId);
+      const updated: KeyUsageStats = {
+        apiKeyId: input.apiKeyId,
+        requestCount: (existing?.requestCount ?? 0) + 1,
+        promptTokens: (existing?.promptTokens ?? 0) + promptTokens,
+        completionTokens: (existing?.completionTokens ?? 0) + completionTokens,
+        totalTokens:
+          (existing?.totalTokens ?? 0) + promptTokens + completionTokens,
+        lastRequestAt: new Date().toISOString(),
+      };
+      this.stats.set(input.apiKeyId, updated);
+    }
 
-    this.stats.set(input.apiKeyId, updated);
-
+    const id = crypto.randomUUID();
     this.events.push({
-      id: crypto.randomUUID(),
-      apiKeyId: input.apiKeyId,
+      id,
+      apiKeyId: input.apiKeyId ?? "anonymous",
       provider: input.provider,
       model: input.model,
       promptTokens,
@@ -183,6 +187,7 @@ export class FileUsageStore implements UsageStore {
 
     await this.persist();
     await this.persistEvents();
+    return id;
   }
 
   async getUsage(apiKeyId: string): Promise<KeyUsageStats | null> {

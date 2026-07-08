@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import * as Sentry from "@sentry/node";
 import { getAddress } from "viem";
 import { createApiKeyStore, createAuthHook } from "./auth/index.js";
+import { createOptionalAuthHook } from "./auth/optional-auth.js";
 import { createWalletNonceStore } from "./auth/wallet-nonce.js";
 import { loadConfig } from "./config.js";
 import { closePool } from "./db/pool.js";
@@ -21,6 +22,10 @@ import { registerModelsRoutes } from "./routes/models.js";
 import { registerStatusRoutes } from "./routes/status.js";
 import { registerUsageRoutes } from "./routes/usage.js";
 import { registerBalanceRoutes } from "./routes/balance.js";
+import { registerPricingRoutes } from "./routes/pricing.js";
+import { createPaymentStore } from "./payments/store.js";
+import { registerX402ChatPayments } from "./payments/x402-server.js";
+import type { Network } from "@x402/core/types";
 import { createRateLimiter } from "./rate-limit.js";
 import { createUsageStore } from "./usage/index.js";
 import { createCreditStore } from "./credits/index.js";
@@ -68,6 +73,10 @@ export async function buildServer() {
       "x-lmx-latency",
       "x-lmx-cost",
       "x-lmx-balance",
+      "payment-required",
+      "payment-response",
+      "x-payment-required",
+      "x-payment-response",
     ],
 
   });
@@ -111,11 +120,48 @@ export async function buildServer() {
 
   const creditStore = createCreditStore();
 
+  const paymentStore = createPaymentStore();
+  if (!paymentStore && process.env.X402_ENABLED === "true") {
+    app.log.warn(
+      "X402_ENABLED is true but payment store is disabled — requires DATABASE_URL",
+    );
+  }
+
   const walletNonceStore = createWalletNonceStore();
 
   const authenticate = createAuthHook(apiKeyStore, {
     sessionSecret: config.sessionSecret,
   });
+
+  const optionalAuth = createOptionalAuthHook(apiKeyStore, {
+    sessionSecret: config.sessionSecret,
+  });
+  app.addHook("onRequest", optionalAuth);
+
+  if (
+    config.x402.enabled &&
+    config.x402.payToAddress &&
+    paymentStore
+  ) {
+    registerX402ChatPayments({
+      app,
+      providers,
+      healthStore,
+      paymentStore,
+      payToAddress: getAddress(config.x402.payToAddress),
+      networkId: config.x402.networkId as Network,
+      cdpApiKeyId: config.x402.cdpApiKeyId,
+      cdpApiKeySecret: config.x402.cdpApiKeySecret,
+      marginPct: config.x402.marginPct,
+      minCallUsdc: config.x402.minCallUsdc,
+      defaultMaxCompletionTokens: config.x402.defaultMaxCompletionTokens,
+    });
+    app.log.info("x402 per-call payments enabled on POST /v1/chat/completions");
+  } else if (config.x402.enabled) {
+    app.log.warn(
+      "X402_ENABLED is true but x402 middleware is disabled — requires DATABASE_URL and TREASURY_ADDRESS",
+    );
+  }
 
   let depositPoller: DepositPoller | null = null;
   const depositStore = createDepositStore();
@@ -196,6 +242,9 @@ export async function buildServer() {
 
     storage: process.env.DATABASE_URL ? "postgres" : "file",
 
+    x402_payments: paymentStore ? "ready" : "disabled",
+    x402_enabled: config.x402.enabled,
+
   }));
 
 
@@ -229,17 +278,27 @@ export async function buildServer() {
       : undefined,
   });
   await registerModelsRoutes(app, { providers, healthStore });
+  await registerPricingRoutes(app, {
+    providers,
+    healthStore,
+    chainId: config.siwe.chainId,
+  });
 
   await registerChatRoutes(app, {
     router,
-    authenticate,
     usageStore,
     creditStore,
+    paymentStore,
     chatRateLimit: createRateLimiter({
       max: config.chatRateLimitMax,
       windowMs: config.chatRateLimitWindowMs,
     }),
+    x402RateLimit: createRateLimiter({
+      max: Number(process.env.X402_RATE_LIMIT_MAX ?? 10),
+      windowMs: Number(process.env.X402_RATE_LIMIT_WINDOW_MS ?? 60_000),
+    }),
     minChatCost: config.minChatCost,
+    x402Enabled: config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
   });
   await registerUsageRoutes(app, {
     store: usageStore,

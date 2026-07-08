@@ -86,6 +86,41 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS idx_usage_events_unanchored
     ON usage_events (created_at)
     WHERE receipt_hash IS NOT NULL AND anchor_batch_id IS NULL`,
+  `CREATE TABLE IF NOT EXISTS payment_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    usage_event_id UUID REFERENCES usage_events(id),
+    api_key_id UUID REFERENCES api_keys(id),
+    payer_wallet TEXT NOT NULL,
+    quoted_amount NUMERIC(18, 8) NOT NULL,
+    settled_amount NUMERIC(18, 8),
+    refunded_amount NUMERIC(18, 8) NOT NULL DEFAULT 0,
+    chain_id INTEGER NOT NULL,
+    tx_hash TEXT,
+    payment_payload_hash TEXT NOT NULL,
+    facilitator_ref TEXT,
+    model TEXT NOT NULL,
+    route TEXT NOT NULL DEFAULT 'chat/completions',
+    estimated_tokens INTEGER,
+    status TEXT NOT NULL DEFAULT 'quoted',
+    failure_reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    verified_at TIMESTAMPTZ,
+    settled_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_events_payload_hash
+    ON payment_events (payment_payload_hash)`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_events_payer_created
+    ON payment_events (payer_wallet, created_at DESC)`,
+  `CREATE INDEX IF NOT EXISTS idx_payment_events_status
+    ON payment_events (status)
+    WHERE status IN ('verified', 'settled')`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS payer_wallet TEXT`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS payment_event_id UUID REFERENCES payment_events(id)`,
+  `ALTER TABLE usage_events
+    ALTER COLUMN api_key_id DROP NOT NULL`,
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -13,6 +13,9 @@ export function getPool(): pg.Pool {
   pool = new pg.Pool({
     connectionString,
     ssl: connectionString.includes("localhost") ? undefined : { rejectUnauthorized: false },
+    connectionTimeoutMillis: 5_000,
+    idleTimeoutMillis: 30_000,
+    max: 10,
   });
 
   return pool;

@@ -650,6 +650,40 @@ data: {
               </p>
             </DocSection>
 
+            <DocSection id="pricing" title="Pricing (x402)">
+              <p className="text-body-md text-on-surface-muted">
+                <code className="text-mono-sm">GET /v1/pricing</code> returns per-model list
+                prices for x402 per-call payments. Prices are based on the cheapest healthy
+                provider for each alias plus a 25% margin, with a $0.001 USDC minimum per call.
+                No authentication required.
+              </p>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Add <code className="text-mono-sm">?model=llama-3-70b</code> for a single-model
+                quote. Optional <code className="text-mono-sm">prompt_tokens</code>,{" "}
+                <code className="text-mono-sm">max_tokens</code>, and{" "}
+                <code className="text-mono-sm">max_completion_tokens</code> tune the ceiling
+                estimate. Full pricing rules are in{" "}
+                <code className="text-mono-sm">docs/x402-pricing.md</code>.
+              </p>
+              <div className="mt-4">
+                <CodeBlock language="bash">
+                  {`curl ${EXAMPLE_BASE}/v1/pricing?model=llama-3-70b&max_tokens=512`}
+                </CodeBlock>
+              </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Per-call x402 payment on <code className="text-mono-sm">POST /v1/chat/completions</code>{" "}
+                is live when <code className="text-mono-sm">X402_ENABLED=true</code>. Send a request
+                without <code className="text-mono-sm">Authorization</code> to receive HTTP 402 with
+                payment instructions, then retry with a <code className="text-mono-sm">PAYMENT-SIGNATURE</code>{" "}
+                header. API-key balance billing continues to work unchanged.
+              </p>
+              <div className="mt-4">
+                <CodeBlock language="bash">
+                  {`# Expect 402 with payment instructions\ncurl -i -X POST ${EXAMPLE_BASE}/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"llama-3-70b","messages":[{"role":"user","content":"hi"}]}'`}
+                </CodeBlock>
+              </div>
+            </DocSection>
+
             <DocSection id="models" title="Models">
               <p className="text-body-md text-on-surface-muted">
                 <code className="text-mono-sm">GET /v1/models</code> returns aliases available from
@@ -773,17 +807,29 @@ data: {
               <h3 className="mt-8 text-title-md text-on-surface">Coming next</h3>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-body-sm text-on-surface-muted">
                 <li>
-                  Agent-native payments (x402) — per-request stablecoin payment so autonomous
-                  agents can discover, pay for, and consume inference without pre-funded balances or
-                  human checkout.
+                  Agent-native payments (x402) — per-request USDC payment on{" "}
+                  <code className="text-mono-sm">POST /v1/chat/completions</code> when{" "}
+                  <code className="text-mono-sm">X402_ENABLED=true</code>; pricing catalog at{" "}
+                  <code className="text-mono-sm">GET /v1/pricing</code>.
                 </li>
                 <li>
                   Distribution — x402 Bazaar and Agentic.Market listing, MCP server, and ElizaOS
                   plugin so agents can find LMX Cloud through standard discovery channels.
                 </li>
                 <li>
-                  Trust and legal — terms of service, privacy policy, and acceptable-use content
-                  before public agent-facing listings go live.
+                  Trust and legal —{" "}
+                  <Link to="/legal/terms" className="text-primary hover:text-primary-hover">
+                    Terms
+                  </Link>
+                  ,{" "}
+                  <Link to="/legal/privacy" className="text-primary hover:text-primary-hover">
+                    Privacy
+                  </Link>
+                  , and{" "}
+                  <Link to="/legal/acceptable-use" className="text-primary hover:text-primary-hover">
+                    Acceptable Use
+                  </Link>{" "}
+                  (beta drafts — attorney review before public listings).
                 </li>
               </ul>
               <p className="mt-4 text-body-sm text-on-surface-muted">
@@ -813,6 +859,12 @@ data: {
                         <Link to="/status" className="text-primary hover:text-primary-hover">
                           status page
                         </Link>
+                      </DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>GET /v1/pricing</DataTableCell>
+                      <DataTableCell>
+                        Per-model x402 list prices and optional quote for a single model
                       </DataTableCell>
                     </DataTableRow>
                     <DataTableRow>

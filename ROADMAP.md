@@ -2,9 +2,9 @@
 
 Original goal: go from working proof-of-concept (Phase 1-7) to something you can hand to strangers — developers trying it for free — without it breaking, leaking data, or embarrassing you. That base layer is done. The roadmap has since grown a second, bigger goal on top of it: reposition as Web3-native infrastructure and become "findable and payable" by autonomous agents (Phase 1 distribution, below). Both tracks are tracked in this one file — free-beta hardening didn't stop mattering, it's just no longer the only thing happening.
 
-## CURRENT STATE SNAPSHOT (2026-07-07, evening audit) — read this first
+## CURRENT STATE SNAPSHOT (2026-07-08, evening) — read this first
 
-Everything below is verified directly against the code, not assumed from memory or from what Cursor's own summaries claimed. This section supersedes the blow-by-blow notes further down for a quick read; the detailed sections below stay as the record of *why* each decision was made.
+Everything below is verified directly against the code and local test runs, not assumed from memory or from what Cursor's own summaries claimed. This section supersedes the blow-by-blow notes further down for a quick read; the detailed sections below stay as the record of *why* each decision was made.
 
 ### Built so far
 
@@ -13,22 +13,35 @@ Everything below is verified directly against the code, not assumed from memory 
 - **Full dashboard** (`apps/web`) — overview, keys, usage, per-request logs, public status page, billing, docs page.
 - **Web3-1: wallet identity + USDC funding on Base — shipped, hardened, verified end-to-end.** SIWE sign-in (browser or raw keypair script), Clerk as alternate auth, USDC deposits auto-crediting via confirmation-gated poller, in-console "Add Credits" flow, adaptive billing refresh, wrong-network detection, unmatched-deposit guidance. Railway confirmed on Base mainnet config (`SIWE_CHAIN_ID`, `BASE_RPC_URL`).
 - **Web3-2: verifiable on-chain logs — shipped, verified end-to-end on Base Sepolia (2026-07-07).** Per-request `lmx_receipt_v1` receipts, batched Merkle anchoring via `LmxLogAnchor` + background poller, `GET /v1/usage/logs/:id/proof`, anchoring on `GET /v1/status` and `StatusPage.tsx`, `pnpm verify:receipt` CLI, unit tests for receipt/Merkle/proof. Historical logs before enablement are not retroactively verifiable.
-- **Documentation refresh** — `README.md` and `DocsPage.tsx` describe Web3 direction, wallet auth, USDC funding, verifiable logs, and public roadmap section.
+- **x402 Sprint 1 — shipped (2026-07-07).** Per-call pricing catalog (`apps/api/src/pricing/`), `GET /v1/pricing`, `payment_events` migration + Postgres store, ADRs in `docs/x402-pricing.md` and `docs/x402-verification.md` (CDP Facilitator chosen).
+- **x402 Sprint 2 — implemented in code, E2E not verified (2026-07-08).** `@x402/fastify` middleware on `POST /v1/chat/completions`, dual path (Bearer → balance; no key → x402), CDP verify/settle hooks, `setSettlementOverrides` for actual cost, `pnpm test:x402` unpaid probe passes (~30ms → 402). **Paid Sepolia E2E (`pnpm test:x402 -- --pay`) still blocked — see flagged blockers below.**
+- **Documentation refresh** — `README.md` and `DocsPage.tsx` describe Web3 direction, wallet auth, USDC funding, verifiable logs, x402 pricing endpoint, and public roadmap section.
 
-### Known gaps / needs hardening (verified 2026-07-07 evening)
+### Known gaps / needs hardening (verified 2026-07-08)
 
 **Security — fix before more money flows:**
 - ~~**Wallet squat on `POST /v1/auth/key` (HIGH).**~~ **Fixed 2026-07-07.** Unauthenticated key mint no longer accepts a `wallet` field; wallet-linked keys require SIWE (`/v1/auth/wallet/verify`) or authenticated `POST /v1/auth/keys`.
 
+**x402 Sprint 2 — flagged blockers (do not treat as production-ready until closed):**
+
+| Blocker | Symptom | Likely cause | Fix direction |
+|---------|---------|--------------|---------------|
+| **Paid E2E hang** | `pnpm test:x402 -- --pay` times out after CDP verify (~60–130s) | Fastify body-parser stall after long `onRequest` verify; early raw-body replay may not survive the async gap | Fix `registerEarlyJsonBodyParser` in `x402-server.ts` (cache + `preParsing` short-circuit) |
+| **Neon DB unreachable locally** | `payment_events` writes `ETIMEDOUT`; was blocking HTTP response before defer fix | Network/firewall to Neon from dev machine | Confirm `DATABASE_URL` reachable; use local Postgres for dev or fix VPN; payment recording is now fire-and-forget but still won't persist until DB works |
+| **CDP verify latency** | Every paid call waits 1–2+ min at facilitator | External CDP `/verify` + on-chain simulation | Expected for beta; document in ops; consider async UX / status for agents later |
+| **Flaky Sepolia RPC** | Deposit/anchor pollers log `fetch failed` on `sepolia.base.org` | Public RPC rate limits / instability | Use Alchemy or Coinbase CDP Base Sepolia RPC in `BASE_RPC_URL` |
+| **Dev env hygiene** | `EADDRINUSE :3000`, tests hit stale servers | Multiple `pnpm dev` instances | One API process on 3000 when testing x402 |
+
 **Hard blockers for Phase 1:**
-- **Week 3 legal** — ToS, privacy policy, acceptable use, feedback channel. Not started; no legal content in repo or web app. Hard gate before Bazaar/Agentic.Market listing.
-- **x402 per-call payments** — not built. Today is deposit → balance → deduct; agents expect pay-per-request with machine-readable 402. Blocks all three Phase 1 distribution goals.
-- **Payment failure reconciliation** — no refund/credit-back path when payment succeeds but io.net/Akash fails. Required for x402; doesn't exist for balance flow either on provider failure after deduct.
+- **Week 3 legal** — ToS, privacy policy, acceptable use, feedback channel. **Drafts in `legal/` and `/legal/*` (2026-07-08).** Attorney review still required before Bazaar listing.
+- **x402 paid path verified on testnet** — unpaid 402 works; paid verify → inference → settle E2E not yet green on Sepolia. Blocks Goal 1 confidence (not the same as "code doesn't exist").
+- **Payment failure reconciliation** — partial: x402 middleware cancels verified payment on handler 4xx/5xx; no explicit refund tx or user-visible credit-back when provider fails after balance deduct.
 
 **Ops / scale (fine for single-instance beta, harden before scaling):**
 - Rate limiter and SIWE nonce store are in-memory — reset on deploy, ineffective across multiple Railway instances.
 - Uptime monitor (UptimeRobot/Better Stack) — can't verify from code; confirm externally.
 - Streaming edge case: if stream completes but final `deduct` fails, client already received tokens with no recovery.
+- x402 streaming not supported yet (`x402_stream_unsupported` on paid path).
 
 **Polish (non-blocking):**
 - Anchor contract on Base mainnet (Sepolia verified; Railway needs `ANCHOR_*` + deploy).
@@ -43,15 +56,23 @@ Positioning: **"AWS for Web3"** — Web3-native infrastructure for autonomous AI
 ### What's left to build, roughly in order
 
 0. ~~**Wallet squat fix on `POST /v1/auth/key`**~~ — **done 2026-07-07.**
-1. **Week 3 legal** (Track B, parallel) — hard blocker for public listing.
-2. **x402 Sprint 1** — per-call pricing, verification approach decision, `payment_events` DB migration.
-3. **x402 Sprint 2** — 402 response + payment verification on `chat.ts`, reconciliation logic, Sepolia E2E test.
-4. **x402 Sprint 3** — mainnet config, abuse/replay protection, anonymous rate limits.
-5. **Phase 1 Goal 1** — Bazaar + Agentic.Market listing (after legal + Sprint 3).
+1. **Week 3 legal** (Track B) — drafts published at `/legal/*`; **remaining:** attorney review, Clerk signup links if needed. Hard gate before public listing.
+2. ~~**x402 Sprint 1**~~ — **done 2026-07-07** (`docs/x402-*.md`, `GET /v1/pricing`, `payment_events` store).
+3. **x402 Sprint 2 close-out** — code landed; **remaining:** fix paid E2E blockers above, green `pnpm test:x402 -- --pay` on Sepolia, then mark done.
+4. **x402 Sprint 3** — mainnet config, abuse/replay hardening, anonymous rate limits, billing UI for per-call payments.
+5. **Phase 1 Goal 1** — Bazaar + Agentic.Market listing (after legal + Sprint 2 E2E + Sprint 3).
 6. **Phase 1 Goal 2** — MCP server.
 7. **Phase 1 Goal 3** — ElizaOS plugin.
 8. **Week 4 outreach prep** — depends on Web2-vs-Web3 sequencing decision.
 9. **Polish** — mainnet anchor deploy, LogsPage proof link, distributed rate limiting if scaling past one instance.
+
+### How to make the system better (engineering priorities)
+
+1. **Reliability first** — stable RPC (`BASE_RPC_URL`), reachable Postgres, single-instance discipline, uptime monitor confirmed.
+2. **Close x402 paid loop** — body-parser fix → green Sepolia E2E → then mainnet flip in Sprint 3.
+3. **Legal before listing** — Week 3 content unblocks Bazaar/MCP without taking on unmanaged liability.
+4. **Scale when needed** — Redis-backed rate limits + nonce store before second Railway instance.
+5. **Trust signals** — mainnet anchor deploy, LogsPage proof links, public status page already strong from Web3-2.
 
 ### Explicitly not being built right now
 
@@ -75,11 +96,11 @@ Native token (legal counsel first), Virtuals/ACP + Autonolas + Fetch.ai + Bitten
 - ~~Public status page~~ — `StatusPage.tsx` exists.
 - ~~Per-request logs~~ — `LogsPage.tsx` exists.
 
-## Next sprint (decided 2026-07-07): x402 per-call payments + Week 3 legal in parallel
+## Next sprint (decided 2026-07-08): Week 3 legal + x402 Sprint 2 close-out when ready
 
-**Immediate next task (2026-07-07 evening):** ~~close wallet squat on `POST /v1/auth/key`~~ **done.** Next: x402 Sprint 1 (pricing decision, verification approach, `payment_events` migration) in parallel with Week 3 legal.
+**Immediate next task:** **Week 3 legal** (ToS, privacy, acceptable use, feedback channel) — hard gate for public listing, no engineering dependency. x402 Sprint 2 code is in place; **paid Sepolia E2E is flagged, not done** — revisit when fixing body-parser + DB/RPC env (see blockers table in snapshot).
 
-Web3-2 is done. **Track A (x402)** is the blocking engineering work for Phase 1 distribution. **Track B (legal)** must close before public Bazaar/Agentic.Market listing. Remaining Web3-2 ops (mainnet anchor deploy, optional LogsPage proof UI) are non-blocking polish.
+Web3-2 is done. **Track B (legal)** is the recommended parallel focus. **Track A (x402)** unpaid path works; paid path needs close-out before Sprint 3 / Bazaar. Remaining Web3-2 ops (mainnet anchor deploy, optional LogsPage proof UI) are non-blocking polish.
 
 **Sequencing (2026-07-06): close the two small loose ends first, ToS/Privacy content after.**
 
@@ -91,10 +112,10 @@ Web3-2 is done. **Track A (x402)** is the blocking engineering work for Phase 1 
 
 ## Week 3 — Trust and support basics
 
-- **Terms of Service + Privacy Policy.** Minimal but real — you're collecting emails and usage data from strangers. A generated template (e.g. via a ToS generator or a lawyer-reviewed boilerplate) is enough for a free beta; don't skip it entirely.
-- **Acceptable use / abuse policy.** One paragraph: no illegal content, no key sharing/resale, rate limits are enforced, accounts can be revoked. Link it from signup.
-- **A feedback channel.** Discord server, a shared email, or a Typeform — something lower-friction than "open a GitHub issue" for non-technical-adjacent testers.
-- **Decide (don't build) the future pricing model.** Beta users will ask "what happens when this isn't free." Have a one-line answer ready (e.g. "usage-based, priced near provider cost + margin, beta credits carry over") even though Stripe integration is post-beta.
+- [x] **Terms of Service + Privacy Policy** — beta drafts in `legal/` and web routes `/legal/terms`, `/legal/privacy` (2026-07-08). **Attorney review still required** before production launch.
+- [x] **Acceptable use / abuse policy** — `legal/acceptable-use.md`, `/legal/acceptable-use`, linked from signup.
+- [x] **Feedback channel** — `support@lmxcloud.io` (`/legal/contact`). Replace with Discord or ticketing when ready.
+- [x] **Pricing FAQ one-liner** — on `/legal/contact` and `legal/README.md`.
 
 ## Week 4 — Outreach prep
 
@@ -110,7 +131,7 @@ Direction: reposition LMX Cloud as Web3-native infrastructure, not a DePIN-backe
 - ~~`wallet` is never verified~~ — **fixed 2026-07-07:** unauthenticated `POST /v1/auth/key` no longer accepts `wallet`; SIWE and authenticated `POST /v1/auth/keys` are the only wallet-linking paths.
 - `CreditStore.credit(apiKeyId, amount)` in `apps/api/src/credits/postgres-store.ts` is already the exact function a stablecoin deposit listener would call — no schema change needed, just a new caller instead of the manual `CREDITS_ALLOW_SELF_TOPUP` dev route in `routes/balance.ts`.
 - An API key can already be minted with just a `wallet` string and no email (`POST /v1/auth/key`) — meaning agent self-sovereign key minting is nearly free once wallet claims are actually verified.
-- ~~Nothing on-chain exists anywhere in the codebase~~ — **updated 2026-07-07:** Web3-1 added SIWE + USDC deposit polling; Web3-2 added `LmxLogAnchor` contract, Merkle batch anchoring, and proof API. x402 per-call payments are still not built.
+- ~~Nothing on-chain exists anywhere in the codebase~~ — **updated 2026-07-08:** Web3-1 added SIWE + USDC deposit polling; Web3-2 added `LmxLogAnchor` contract, Merkle batch anchoring, and proof API. x402 per-call payments are **implemented but paid E2E not verified** (unpaid 402 works; see Sprint 2 blockers in snapshot).
 
 ### Sprint Web3-1 — Wallet identity + stablecoin rails (foundational, do together)
 
@@ -207,19 +228,19 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 ### Distribution Sprint 1 — Decisions + foundations
 
 - [x] **Security:** remove unverified `wallet` from unauthenticated `POST /v1/auth/key` (wallet keys via SIWE only). Done 2026-07-07.
-- [ ] Decide per-call pricing (dollar amount per model/token, documented in one place both docs and the eventual Bazaar listing will pull from).
-- [ ] Decide payment verification approach: self-verify the on-chain transaction vs. use Coinbase's CDP facilitator — document the trade-off actually made, not just the options.
-- [ ] DB migration: add a per-call payment-event record distinct from the existing balance-credit rows, so a payment can be reconciled against the specific inference call it paid for.
+- [x] Decide per-call pricing (dollar amount per model/token, documented in one place both docs and the eventual Bazaar listing will pull from). See `docs/x402-pricing.md` and `GET /v1/pricing`.
+- [x] Decide payment verification approach: self-verify the on-chain transaction vs. use Coinbase's CDP facilitator — document the trade-off actually made, not just the options. See `docs/x402-verification.md` (CDP Facilitator chosen).
+- [x] DB migration: add a per-call payment-event record distinct from the existing balance-credit rows, so a payment can be reconciled against the specific inference call it paid for. `payment_events` table + `usage_events.payment_event_id`.
 - [ ] Confirm the uptime monitor (UptimeRobot/Better Stack) is actually configured — long-open item, now matters more since Bazaar's discovery ranking factors reliability.
-- [ ] (Track B, parallel) Kick off ToS / privacy policy / acceptable-use draft — generator template or lawyer-reviewed boilerplate, doesn't need engineering time.
+- [x] (Track B, parallel) ToS / privacy / acceptable-use drafts — `legal/` + `/legal/*` (2026-07-08).
 - [x] ~~(Track C) Web3-2 receipt hashing~~ — done (`lmx_receipt_v1`, `usage_events.receipt_hash`).
 
 ### Distribution Sprint 2 — x402 per-call payments (Track A)
 
-- [ ] Implement 402 Payment Required response + payment verification on the paid inference routes (`chat.ts` first), per Sprint 1's decision.
-- [ ] Reconciliation logic: auto-refund or credit-back when payment succeeds but the downstream io.net/Akash call fails — currently has no path at all, real gap.
-- [ ] End-to-end test on Base Sepolia testnet, mirroring the Web3-1 verification pattern.
-- [ ] (Track B) Legal draft ready for review.
+- [x] Implement 402 Payment Required response + payment verification on the paid inference routes (`chat.ts` first), per Sprint 1's decision. `@x402/fastify` middleware + `upto` scheme; dual path with Bearer auth for balance users.
+- [x] Reconciliation logic: auto-refund or credit-back when payment succeeds but the downstream io.net/Akash call fails — payment cancellation on handler 4xx/5xx via x402 middleware; partial settlement via `setSettlementOverrides` for actual token cost.
+- [ ] **End-to-end test on Base Sepolia — FLAGGED (2026-07-08).** Unpaid probe green (`pnpm test:x402` → 402 in ~30ms). Paid path (`pnpm test:x402 -- --pay`) not verified: hangs after CDP verify. Blockers: body-parser after long verify, Neon DB timeout from dev network, flaky `sepolia.base.org` RPC. Partial mitigations landed: non-blocking `payment_events` writes, 5s PG connection timeout.
+- [x] (Track B) Legal draft ready for review — published at `/legal/*`; counsel review pending.
 - [x] ~~(Track C) Web3-2: batched Merkle anchoring live on testnet~~ — done (Sepolia verified 2026-07-07).
 
 ### Distribution Sprint 3 — Production hardening
@@ -227,7 +248,7 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 - [ ] Flip x402 config to Base mainnet values; verify in production the same way Web3-1's mainnet config was checked (not just assumed).
 - [ ] Abuse/load-test the now-fully-public payment endpoint: replay/double-spend handling on payment proofs, rate limits appropriate for anonymous callers.
 - [ ] Portal: extend billing/usage views to show per-call payment records, not just balance draws — decide explicitly whether anonymous (no-session) x402 payments get any payer-visible record at all, or are purely internal-ops visibility.
-- [ ] (Track B) Legal published and linked from signup + docs — **hard gate, does not move to Sprint 4 until this is done.**
+- [x] (Track B) Legal published and linked from signup + docs — **counsel review still required before Sprint 4 listing gate.**
 - [x] ~~(Track C) Web3-2: `GET /v1/usage/logs/:id/proof` endpoint live, contract address + recent roots surfaced on `StatusPage.tsx`~~ — done.
 - [ ] (Track C, optional) Deploy anchor contract on Base mainnet + set `ANCHOR_*` on Railway; optional LogsPage proof link.
 

@@ -41,7 +41,23 @@ export function SignUpPage() {
         onSuccess={() => navigate("/console/overview", { replace: true })}
       />
 
-      <p className="mt-6 text-body-sm text-on-surface-muted">
+      <p className="mt-6 max-w-[400px] text-center text-body-sm text-on-surface-muted">
+        By signing up or connecting a wallet, you agree to our{" "}
+        <Link to="/legal/terms" className="text-primary hover:text-primary-hover">
+          Terms of Service
+        </Link>
+        ,{" "}
+        <Link to="/legal/privacy" className="text-primary hover:text-primary-hover">
+          Privacy Policy
+        </Link>
+        , and{" "}
+        <Link to="/legal/acceptable-use" className="text-primary hover:text-primary-hover">
+          Acceptable Use Policy
+        </Link>
+        .
+      </p>
+
+      <p className="mt-4 text-body-sm text-on-surface-muted">
         <Link to="/" className="hover:text-on-surface">
           ← Back to home
         </Link>

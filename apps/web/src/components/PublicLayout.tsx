@@ -86,6 +86,12 @@ export function PublicLayout({ children }: PublicLayoutProps) {
             <Link to="/status" className="hover:text-on-surface">
               Status
             </Link>
+            <Link to="/legal/terms" className="hover:text-on-surface">
+              Terms
+            </Link>
+            <Link to="/legal/privacy" className="hover:text-on-surface">
+              Privacy
+            </Link>
             <Link to="/sign-up" className="hover:text-on-surface">
               Console
             </Link>

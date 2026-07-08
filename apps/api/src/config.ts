@@ -7,6 +7,12 @@ import { fileURLToPath } from "url";
 import { getAddress } from "viem";
 
 import { resolveMaxDepositUsdc } from "./deposits/limits.js";
+import {
+  DEFAULT_MAX_COMPLETION_TOKENS,
+  MIN_CALL_USDC,
+  PRICING_MARGIN_PCT,
+  toCaip2ChainId,
+} from "./pricing/constants.js";
 
 
 
@@ -84,6 +90,18 @@ export interface Config {
     pollIntervalMs: number;
     minEvents: number;
     maxEvents: number;
+  };
+
+  x402: {
+    enabled: boolean;
+    facilitatorUrl: string;
+    cdpApiKeyId?: string;
+    cdpApiKeySecret?: string;
+    payToAddress?: string;
+    networkId: string;
+    minCallUsdc: number;
+    defaultMaxCompletionTokens: number;
+    marginPct: number;
   };
 
 }
@@ -178,6 +196,18 @@ function assertProductionSafety(config: Config): void {
     throw new Error(
       "ANCHOR_CONTRACT_ADDRESS is set but anchoring is not fully configured — set DATABASE_URL, BASE_RPC_URL, and ANCHOR_PRIVATE_KEY",
     );
+  }
+
+  if (process.env.X402_ENABLED === "true") {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("X402_ENABLED requires DATABASE_URL");
+    }
+    if (!process.env.TREASURY_ADDRESS) {
+      throw new Error("X402_ENABLED requires TREASURY_ADDRESS");
+    }
+    if (!process.env.CDP_API_KEY_ID || !process.env.CDP_API_KEY_SECRET) {
+      throw new Error("X402_ENABLED requires CDP_API_KEY_ID and CDP_API_KEY_SECRET");
+    }
   }
 }
 
@@ -322,6 +352,23 @@ export function loadConfig(): Config {
     },
     deposits,
     anchoring,
+    x402: {
+      enabled: process.env.X402_ENABLED === "true",
+      facilitatorUrl:
+        process.env.X402_FACILITATOR_URL ??
+        "https://api.cdp.coinbase.com/platform/v2/x402",
+      cdpApiKeyId: process.env.CDP_API_KEY_ID,
+      cdpApiKeySecret: process.env.CDP_API_KEY_SECRET,
+      payToAddress: deposits?.treasuryAddress,
+      networkId: toCaip2ChainId(siweChainId),
+      minCallUsdc: Number(process.env.X402_MIN_CALL_USDC ?? MIN_CALL_USDC),
+      defaultMaxCompletionTokens: parsePositiveInt(
+        "X402_DEFAULT_MAX_COMPLETION_TOKENS",
+        process.env.X402_DEFAULT_MAX_COMPLETION_TOKENS,
+        DEFAULT_MAX_COMPLETION_TOKENS,
+      ),
+      marginPct: Number(process.env.X402_PRICING_MARGIN_PCT ?? PRICING_MARGIN_PCT),
+    },
   };
 
   assertProductionSafety(config);

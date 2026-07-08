@@ -7,6 +7,7 @@ import { BillingPage } from "./pages/BillingPage";
 import { KeysPage } from "./pages/KeysPage";
 import { DocsPage } from "./pages/DocsPage";
 import { LandingPage } from "./pages/LandingPage";
+import { LegalPage } from "./pages/LegalPage";
 import { StatusPage } from "./pages/StatusPage";
 import { LogsPage } from "./pages/LogsPage";
 import { OverviewPage } from "./pages/OverviewPage";
@@ -46,6 +47,8 @@ function AppRoutes() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/status" element={<StatusPage />} />
       <Route path="/docs" element={<DocsPage />} />
+      <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
+      <Route path="/legal/:doc" element={<LegalPage />} />
       <Route
         path="/auth/callback"
         element={

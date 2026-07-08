@@ -11,7 +11,7 @@ import type {
 } from "./store.js";
 
 export class PostgresUsageStore implements UsageStore {
-  async recordUsage(input: RecordUsageInput): Promise<void> {
+  async recordUsage(input: RecordUsageInput): Promise<string | null> {
     const pool = getPool();
     const totalTokens = input.promptTokens + input.completionTokens;
     const cost = input.cost ?? 0;
@@ -20,30 +20,34 @@ export class PostgresUsageStore implements UsageStore {
     try {
       await client.query("BEGIN");
 
-      await client.query(
-        `INSERT INTO key_usage (
-           api_key_id, request_count, prompt_tokens, completion_tokens, total_tokens, last_request_at
-         ) VALUES ($1, 1, $2, $3, $4, NOW())
-         ON CONFLICT (api_key_id) DO UPDATE SET
-           request_count = key_usage.request_count + 1,
-           prompt_tokens = key_usage.prompt_tokens + EXCLUDED.prompt_tokens,
-           completion_tokens = key_usage.completion_tokens + EXCLUDED.completion_tokens,
-           total_tokens = key_usage.total_tokens + EXCLUDED.total_tokens,
-           last_request_at = NOW()`,
-        [input.apiKeyId, input.promptTokens, input.completionTokens, totalTokens],
-      );
+      if (input.apiKeyId) {
+        await client.query(
+          `INSERT INTO key_usage (
+             api_key_id, request_count, prompt_tokens, completion_tokens, total_tokens, last_request_at
+           ) VALUES ($1, 1, $2, $3, $4, NOW())
+           ON CONFLICT (api_key_id) DO UPDATE SET
+             request_count = key_usage.request_count + 1,
+             prompt_tokens = key_usage.prompt_tokens + EXCLUDED.prompt_tokens,
+             completion_tokens = key_usage.completion_tokens + EXCLUDED.completion_tokens,
+             total_tokens = key_usage.total_tokens + EXCLUDED.total_tokens,
+             last_request_at = NOW()`,
+          [input.apiKeyId, input.promptTokens, input.completionTokens, totalTokens],
+        );
+      }
 
       const inserted = await client.query<{
         id: string;
         created_at: Date;
       }>(
         `INSERT INTO usage_events (
-           api_key_id, provider, model, prompt_tokens, completion_tokens,
-           total_tokens, cost, latency_ms, fallback_used
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           api_key_id, payer_wallet, payment_event_id, provider, model,
+           prompt_tokens, completion_tokens, total_tokens, cost, latency_ms, fallback_used
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING id, created_at`,
         [
-          input.apiKeyId,
+          input.apiKeyId ?? null,
+          input.payerWallet?.toLowerCase() ?? null,
+          input.paymentEventId ?? null,
           input.provider,
           input.model,
           input.promptTokens,
@@ -76,6 +80,7 @@ export class PostgresUsageStore implements UsageStore {
       );
 
       await client.query("COMMIT");
+      return row.id;
     } catch (err) {
       await client.query("ROLLBACK");
       throw err;

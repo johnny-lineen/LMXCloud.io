@@ -1,6 +1,14 @@
-# LMX Cloud — DePIN Inference Router
+# LMX Cloud — OpenAI-Compatible Inference Router
 
-OpenAI-compatible inference API that routes requests through decentralized compute networks.
+OpenAI-compatible inference API that routes requests through decentralized compute (io.net, Akash) with automatic provider fallback. Evolving into Web3-native infrastructure: wallet-based identity (SIWE), on-chain USDC funding on Base, and verifiable routing logs for developers and autonomous agents.
+
+## Current capabilities
+
+- Multi-provider routing with health-aware fallback and transparent `x-lmx-*` headers
+- Streaming chat completions (SSE) with billing metadata
+- Email sign-in (Clerk) or wallet sign-in (SIWE) with session tokens and API keys
+- USDC deposits on Base credited to inference balance after on-chain confirmations
+- Dashboard at `apps/web` — keys, usage, billing, per-request logs, provider status
 
 ## Phase 7 (current)
 
@@ -58,9 +66,57 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 ```bash
 pnpm install
 cp .env.example .env
-# Edit .env — IONET_API_KEY required; DATABASE_URL recommended for Postgres storage
+# Edit .env — IONET_API_KEY and SESSION_SECRET required; DATABASE_URL recommended
 pnpm dev
 ```
+
+### Web3 environment variables
+
+Wallet auth and USDC deposits are configured in `apps/api/src/config.ts`. Set these in `.env` when running wallet sign-in or on-chain funding locally:
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `SIWE_DOMAIN` | EIP-4361 domain in SIWE messages | `localhost` |
+| `SIWE_URI` | EIP-4361 URI (dashboard origin) | `http://localhost:5173` |
+| `SIWE_CHAIN_ID` | Chain ID for SIWE and deposits | `8453` (Base mainnet); use `84532` for Base Sepolia |
+| `BASE_RPC_URL` | JSON-RPC URL for deposit poller | — (required with treasury for deposits) |
+| `TREASURY_ADDRESS` | Wallet that receives USDC deposits | — |
+| `USDC_CONTRACT_ADDRESS` | ERC-20 USDC contract on the chain | Base mainnet or Sepolia USDC if unset |
+| `DEPOSIT_CONFIRMATIONS` | Block confirmations before crediting | `10` |
+| `DEPOSIT_POLL_INTERVAL_MS` | How often the poller scans blocks | `15000` |
+| `DEPOSIT_LOOKBACK_BLOCKS` | Blocks scanned on first poll | `100` |
+| `DEPOSIT_MAX_USDC` | Maximum single deposit amount | `10000` |
+| `CREDITS_ALLOW_SELF_TOPUP` | Enable `POST /v1/credits/topup` (dev only) | `true` in `.env.example` |
+| `CLERK_SECRET_KEY` | Verify Clerk session tokens from the dashboard | — |
+| `SESSION_SECRET` | Sign dashboard/wallet session tokens | required at boot |
+| `SESSION_TTL_MS` | Session token lifetime | 30 days |
+
+Deposits activate only when `DATABASE_URL`, `BASE_RPC_URL`, and `TREASURY_ADDRESS` are all set. `CREDITS_ALLOW_SELF_TOPUP` must not be enabled in production.
+
+## Wallet auth and USDC funding (local)
+
+**Wallet sign-in (SIWE)** — alternative to Clerk email sign-in:
+
+1. `POST /v1/auth/wallet/nonce` with `{ "address": "0x..." }` — returns nonce, `domain`, `uri`, and `chain_id`.
+2. Sign an EIP-4361 message with statement `Sign in to LMX Cloud`.
+3. `POST /v1/auth/wallet/verify` with `{ "message", "signature" }` — returns `session_token` and `api_key_id`.
+
+Headless agent example (no browser):
+
+```bash
+WALLET_PRIVATE_KEY=0x... API_URL=http://localhost:3000 node scripts/wallet-auth.mjs
+```
+
+**USDC funding** — requires a wallet-linked account (SIWE sign-in) and deposit env vars above:
+
+1. Authenticate with your `session_token` or API key.
+2. `GET /v1/billing/deposit-info` — treasury address, USDC contract, limits, and your verified wallet.
+3. Send USDC via ERC-20 `transfer` from that wallet to the treasury on Base.
+4. `GET /v1/billing/deposits` — track `pending` → `credited` (or `unmatched` if sent from the wrong address).
+
+For quick local testing without on-chain transfers, keep `CREDITS_ALLOW_SELF_TOPUP=true` and use `POST /v1/credits/topup` with `{ "amount": 10 }` — this bypasses the treasury entirely.
+
+See [http://localhost:5173/docs](http://localhost:5173/docs) for full request/response shapes.
 
 ## Demo UI
 
@@ -94,7 +150,7 @@ Open [http://localhost:5173](http://localhost:5173) — redirects to sign in or 
 
 ## Test
 
-**API docs:** [http://localhost:5173/docs](http://localhost:5173/docs) — quickstart (curl, Python, JavaScript), model list, routing headers, and streaming.
+**API docs:** [http://localhost:5173/docs](http://localhost:5173/docs) — overview, quickstart, wallet auth, USDC funding, routing, streaming, and roadmap.
 
 **Provider status:** [http://localhost:5173/status](http://localhost:5173/status) — live health from `GET /v1/status` (no auth).
 

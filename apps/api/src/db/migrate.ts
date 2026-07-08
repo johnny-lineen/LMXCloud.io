@@ -64,6 +64,28 @@ const MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS idx_usdc_deposits_from
     ON usdc_deposits (from_address) WHERE status = 'pending'`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS receipt_hash TEXT`,
+  `CREATE TABLE IF NOT EXISTS anchor_batches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    merkle_root TEXT NOT NULL,
+    event_count INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'submitting',
+    tx_hash TEXT,
+    block_number BIGINT,
+    chain_id INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    anchored_at TIMESTAMPTZ
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_anchor_batches_merkle_root
+    ON anchor_batches (merkle_root)`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS anchor_batch_id UUID REFERENCES anchor_batches(id)`,
+  `ALTER TABLE usage_events
+    ADD COLUMN IF NOT EXISTS leaf_index INTEGER`,
+  `CREATE INDEX IF NOT EXISTS idx_usage_events_unanchored
+    ON usage_events (created_at)
+    WHERE receipt_hash IS NOT NULL AND anchor_batch_id IS NULL`,
 ];
 
 export async function runMigrations(): Promise<void> {

@@ -10,7 +10,9 @@
     "build:demo": "pnpm --filter @lmxcloud/demo build",
     "build:web": "pnpm --filter @lmxcloud/web build",
     "typecheck": "pnpm --filter @lmxcloud/shared build && pnpm -r typecheck",
-    "start": "pnpm --filter @lmxcloud/api start"
+    "start": "pnpm --filter @lmxcloud/api start",
+    "deploy:anchor": "pnpm --filter @lmxcloud/api deploy:anchor",
+    "verify:receipt": "pnpm --filter @lmxcloud/api verify:receipt"
   },
   "engines": {
     "node": ">=20"

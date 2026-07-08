@@ -65,10 +65,10 @@ const HERO_STATS = [
     tone: "info" as const,
   },
   {
-    label: "Free to start",
-    value: "$1",
-    unit: "credits",
-    hint: "Instant API key · no card",
+    label: "Model catalog",
+    value: String(SUPPORTED_MODEL_LIST.length),
+    unit: "models",
+    hint: "Llama, Qwen, DeepSeek & more",
     tone: "primary" as const,
   },
 ];

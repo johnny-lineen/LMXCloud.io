@@ -1,4 +1,5 @@
 import type { FastifyInstance, preHandlerHookHandler } from "fastify";
+import type { AnchorStore } from "../anchors/store.js";
 import type { ApiKeyStore } from "../auth/store.js";
 import type { UsageStore } from "../usage/store.js";
 
@@ -6,6 +7,31 @@ interface UsageRouteDeps {
   store: UsageStore;
   apiKeyStore: ApiKeyStore;
   authenticate: preHandlerHookHandler;
+  anchorStore?: AnchorStore | null;
+  anchorContractAddress?: `0x${string}`;
+}
+
+function serializeProof(proof: NonNullable<Awaited<ReturnType<AnchorStore["getLogProof"]>>>) {
+  return {
+    object: "usage_log_proof" as const,
+    log_id: proof.logId,
+    status: proof.status,
+    receipt_version: proof.receiptVersion,
+    receipt: proof.receipt ?? null,
+    receipt_hash: proof.receiptHash ?? null,
+    leaf_index: proof.leafIndex ?? null,
+    merkle_proof: proof.merkleProof ?? null,
+    merkle_root: proof.merkleRoot ?? null,
+    anchor: proof.anchor
+      ? {
+          chain_id: proof.anchor.chainId,
+          contract_address: proof.anchor.contractAddress,
+          tx_hash: proof.anchor.txHash,
+          block_number: proof.anchor.blockNumber,
+          anchored_at: proof.anchor.anchoredAt,
+        }
+      : null,
+  };
 }
 
 function parseDays(value: unknown): number {
@@ -104,6 +130,40 @@ export async function registerUsageRoutes(
         has_more: result.hasMore,
         next_cursor: result.nextCursor,
       };
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/v1/usage/logs/:id/proof",
+    { preHandler: deps.authenticate },
+    async (request, reply) => {
+      if (!deps.anchorStore || !deps.anchorContractAddress) {
+        return reply.status(503).send({
+          error: {
+            message: "Log anchoring is not configured on this server",
+            type: "configuration_error",
+          },
+        });
+      }
+
+      const keys = await deps.apiKeyStore.listForRecord(request.apiKey!);
+      const keyIds = keys.map((key) => key.id);
+      const proof = await deps.anchorStore.getLogProof(
+        request.params.id,
+        keyIds,
+        deps.anchorContractAddress,
+      );
+
+      if (!proof) {
+        return reply.status(404).send({
+          error: {
+            message: "Usage log not found",
+            type: "invalid_request_error",
+          },
+        });
+      }
+
+      return serializeProof(proof);
     },
   );
 }

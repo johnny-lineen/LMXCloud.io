@@ -76,6 +76,16 @@ export interface Config {
     maxDepositUsdc: number;
   };
 
+  anchoring?: {
+    rpcUrl: string;
+    chainId: number;
+    contractAddress: `0x${string}`;
+    privateKey: `0x${string}`;
+    pollIntervalMs: number;
+    minEvents: number;
+    maxEvents: number;
+  };
+
 }
 
 
@@ -119,6 +129,15 @@ function validateEthereumAddress(name: string, value: string): string {
   }
 }
 
+function parsePrivateKey(name: string, value: string): `0x${string}` {
+  const trimmed = value.trim();
+  const hex = trimmed.startsWith("0x") ? trimmed : `0x${trimmed}`;
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hex)) {
+    throw new Error(`${name} must be a 32-byte hex private key`);
+  }
+  return hex as `0x${string}`;
+}
+
 
 
 function assertProductionSafety(config: Config): void {
@@ -152,6 +171,12 @@ function assertProductionSafety(config: Config): void {
   if (process.env.TREASURY_ADDRESS && !config.deposits) {
     throw new Error(
       "TREASURY_ADDRESS is set but deposits are not fully configured — set DATABASE_URL and BASE_RPC_URL",
+    );
+  }
+
+  if (process.env.ANCHOR_CONTRACT_ADDRESS && !config.anchoring) {
+    throw new Error(
+      "ANCHOR_CONTRACT_ADDRESS is set but anchoring is not fully configured — set DATABASE_URL, BASE_RPC_URL, and ANCHOR_PRIVATE_KEY",
     );
   }
 }
@@ -236,6 +261,39 @@ export function loadConfig(): Config {
         }
       : undefined;
 
+  const anchorContractAddress = process.env.ANCHOR_CONTRACT_ADDRESS;
+  const anchorPrivateKey = process.env.ANCHOR_PRIVATE_KEY;
+  const anchoring =
+    baseRpcUrl &&
+    anchorContractAddress &&
+    anchorPrivateKey &&
+    process.env.DATABASE_URL
+      ? {
+          rpcUrl: baseRpcUrl,
+          chainId: siweChainId,
+          contractAddress: validateEthereumAddress(
+            "ANCHOR_CONTRACT_ADDRESS",
+            anchorContractAddress,
+          ) as `0x${string}`,
+          privateKey: parsePrivateKey("ANCHOR_PRIVATE_KEY", anchorPrivateKey),
+          pollIntervalMs: parsePositiveInt(
+            "ANCHOR_BATCH_INTERVAL_MS",
+            process.env.ANCHOR_BATCH_INTERVAL_MS,
+            300_000,
+          ),
+          minEvents: parsePositiveInt(
+            "ANCHOR_BATCH_MIN_EVENTS",
+            process.env.ANCHOR_BATCH_MIN_EVENTS,
+            1,
+          ),
+          maxEvents: parsePositiveInt(
+            "ANCHOR_BATCH_MAX_EVENTS",
+            process.env.ANCHOR_BATCH_MAX_EVENTS,
+            5000,
+          ),
+        }
+      : undefined;
+
   const config: Config = {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
@@ -263,6 +321,7 @@ export function loadConfig(): Config {
       chainId: siweChainId,
     },
     deposits,
+    anchoring,
   };
 
   assertProductionSafety(config);

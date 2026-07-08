@@ -4,6 +4,10 @@ import { extractBearerToken } from "../auth/keys.js";
 import { createSessionToken, createSessionTokenForIdentity } from "../auth/session.js";
 import { verifySiweMessage } from "../auth/siwe.js";
 import type { ApiKeyStore } from "../auth/store.js";
+import {
+  validatePublicCreateKeyBody,
+  WALLET_VERIFICATION_REQUIRED,
+} from "../auth/public-key-body.js";
 import { normalizeWalletAddress } from "../auth/wallet.js";
 import type { WalletNonceStore } from "../auth/wallet-nonce.js";
 import type { CreditStore } from "../credits/store.js";
@@ -27,11 +31,6 @@ interface AuthRouteDeps {
     uri: string;
     chainId: number;
   };
-}
-
-interface CreateKeyBody {
-  email?: string;
-  wallet?: string;
 }
 
 interface RevokeKeyBody {
@@ -70,39 +69,6 @@ function validateWalletVerifyBody(body: unknown): WalletVerifyBody | string {
     return "Field 'signature' must be a non-empty string";
   }
   return { message: b.message, signature: b.signature };
-}
-
-function validateCreateKeyBody(body: unknown): CreateKeyBody | string {
-  if (body === undefined || body === null) {
-    return {};
-  }
-
-  if (typeof body !== "object") {
-    return "Request body must be a JSON object";
-  }
-
-  const b = body as Record<string, unknown>;
-  const result: CreateKeyBody = {};
-
-  if (b.email !== undefined) {
-    if (typeof b.email !== "string" || b.email.trim() === "") {
-      return "Field 'email' must be a non-empty string";
-    }
-    result.email = b.email.trim();
-  }
-
-  if (b.wallet !== undefined) {
-    if (typeof b.wallet !== "string" || b.wallet.trim() === "") {
-      return "Field 'wallet' must be a non-empty string";
-    }
-    try {
-      result.wallet = normalizeWalletAddress(b.wallet);
-    } catch {
-      return "Field 'wallet' must be a valid Ethereum address";
-    }
-  }
-
-  return result;
 }
 
 function validateRevokeKeyBody(body: unknown): RevokeKeyBody | string {
@@ -387,9 +353,20 @@ export async function registerAuthRoutes(
         });
     }
 
-    const validated = validateCreateKeyBody(request.body);
+    const validated = validatePublicCreateKeyBody(request.body);
 
     if (typeof validated === "string") {
+      if (validated === WALLET_VERIFICATION_REQUIRED) {
+        return reply.status(400).send({
+          error: {
+            message:
+              "Wallet-linked keys require SIWE verification. Use POST /v1/auth/wallet/nonce and POST /v1/auth/wallet/verify, or sign in and use POST /v1/auth/keys.",
+            type: "invalid_request_error",
+            code: "wallet_verification_required",
+          },
+        });
+      }
+
       return reply.status(400).send({
         error: { message: validated, type: "invalid_request_error" },
       });

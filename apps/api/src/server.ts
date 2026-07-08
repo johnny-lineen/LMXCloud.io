@@ -9,6 +9,8 @@ import { closePool } from "./db/pool.js";
 import { DepositPoller } from "./deposits/poller.js";
 import { MIN_DEPOSIT_USDC } from "./deposits/limits.js";
 import { createDepositStore } from "./deposits/store.js";
+import { AnchorPoller } from "./anchors/poller.js";
+import { createAnchorStore } from "./anchors/store.js";
 import { HealthMonitor } from "./health/monitor.js";
 import { InMemoryHealthStore } from "./health/store.js";
 import { createProviderRegistry, getFallbackChain } from "./providers/registry.js";
@@ -140,6 +142,32 @@ export async function buildServer() {
     );
   }
 
+  let anchorPoller: AnchorPoller | null = null;
+  const anchorStore = createAnchorStore();
+  if (config.anchoring && anchorStore) {
+    anchorPoller = new AnchorPoller(
+      {
+        rpcUrl: config.anchoring.rpcUrl,
+        chainId: config.anchoring.chainId,
+        contractAddress: config.anchoring.contractAddress,
+        privateKey: config.anchoring.privateKey,
+        pollIntervalMs: config.anchoring.pollIntervalMs,
+        minEvents: config.anchoring.minEvents,
+        maxEvents: config.anchoring.maxEvents,
+      },
+      anchorStore,
+      (message) => app.log.info(message),
+    );
+    anchorPoller.start();
+  } else if (
+    process.env.ANCHOR_CONTRACT_ADDRESS ||
+    process.env.ANCHOR_PRIVATE_KEY
+  ) {
+    app.log.warn(
+      "Anchor poller disabled — requires DATABASE_URL, BASE_RPC_URL, ANCHOR_CONTRACT_ADDRESS, and ANCHOR_PRIVATE_KEY",
+    );
+  }
+
 
 
   healthMonitor.start();
@@ -149,6 +177,8 @@ export async function buildServer() {
     healthMonitor.stop();
 
     depositPoller?.stop();
+
+    anchorPoller?.stop();
 
     await closePool();
 
@@ -187,7 +217,17 @@ export async function buildServer() {
     siwe: config.siwe,
   });
 
-  await registerStatusRoutes(app, { providers, healthStore });
+  await registerStatusRoutes(app, {
+    providers,
+    healthStore,
+    anchorStore,
+    anchoring: config.anchoring
+      ? {
+          chainId: config.anchoring.chainId,
+          contractAddress: config.anchoring.contractAddress,
+        }
+      : undefined,
+  });
   await registerModelsRoutes(app, { providers, healthStore });
 
   await registerChatRoutes(app, {
@@ -201,7 +241,13 @@ export async function buildServer() {
     }),
     minChatCost: config.minChatCost,
   });
-  await registerUsageRoutes(app, { store: usageStore, apiKeyStore, authenticate });
+  await registerUsageRoutes(app, {
+    store: usageStore,
+    apiKeyStore,
+    authenticate,
+    anchorStore,
+    anchorContractAddress: config.anchoring?.contractAddress,
+  });
   await registerBalanceRoutes(app, {
     creditStore,
     authenticate,

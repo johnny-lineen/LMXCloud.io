@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { AnchorStore } from "../anchors/store.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
@@ -6,6 +7,11 @@ import type { HealthStore } from "../health/store.js";
 interface StatusRouteDeps {
   providers: ProviderAdapter[];
   healthStore: HealthStore;
+  anchorStore?: AnchorStore | null;
+  anchoring?: {
+    chainId: number;
+    contractAddress: `0x${string}`;
+  };
 }
 
 export async function registerStatusRoutes(
@@ -14,6 +20,37 @@ export async function registerStatusRoutes(
 ): Promise<void> {
   app.get("/v1/status", async () => {
     const statuses = deps.healthStore.getAll();
+
+    let anchoring:
+      | {
+          enabled: boolean;
+          chain_id: number;
+          contract_address: string;
+          recent_roots: Array<{
+            root: string;
+            tx_hash: string | null;
+            event_count: number;
+            anchored_at: string | null;
+          }>;
+        }
+      | { enabled: false };
+
+    if (deps.anchoring && deps.anchorStore) {
+      const batches = await deps.anchorStore.listRecentAnchoredBatches(5);
+      anchoring = {
+        enabled: true,
+        chain_id: deps.anchoring.chainId,
+        contract_address: deps.anchoring.contractAddress,
+        recent_roots: batches.map((batch) => ({
+          root: batch.merkleRoot,
+          tx_hash: batch.txHash,
+          event_count: batch.eventCount,
+          anchored_at: batch.anchoredAt,
+        })),
+      };
+    } else {
+      anchoring = { enabled: false };
+    }
 
     return {
       object: "status",
@@ -33,6 +70,7 @@ export async function registerStatusRoutes(
         }),
       ),
       fallback_chain: getFallbackChain(deps.providers),
+      anchoring,
     };
   });
 }

@@ -4,6 +4,7 @@ dist/
 .env
 .env.local
 data/
+contracts/out/
 *.log
 .DS_Store
 Thumbs.db

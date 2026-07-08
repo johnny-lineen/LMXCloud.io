@@ -1,4 +1,5 @@
 import { getPool } from "../db/pool.js";
+import { hashReceipt } from "../anchors/receipt.js";
 import type {
   KeyUsageStats,
   RecordUsageInput,
@@ -13,37 +14,74 @@ export class PostgresUsageStore implements UsageStore {
   async recordUsage(input: RecordUsageInput): Promise<void> {
     const pool = getPool();
     const totalTokens = input.promptTokens + input.completionTokens;
+    const cost = input.cost ?? 0;
+    const client = await pool.connect();
 
-    await pool.query(
-      `INSERT INTO key_usage (
-         api_key_id, request_count, prompt_tokens, completion_tokens, total_tokens, last_request_at
-       ) VALUES ($1, 1, $2, $3, $4, NOW())
-       ON CONFLICT (api_key_id) DO UPDATE SET
-         request_count = key_usage.request_count + 1,
-         prompt_tokens = key_usage.prompt_tokens + EXCLUDED.prompt_tokens,
-         completion_tokens = key_usage.completion_tokens + EXCLUDED.completion_tokens,
-         total_tokens = key_usage.total_tokens + EXCLUDED.total_tokens,
-         last_request_at = NOW()`,
-      [input.apiKeyId, input.promptTokens, input.completionTokens, totalTokens],
-    );
+    try {
+      await client.query("BEGIN");
 
-    await pool.query(
-      `INSERT INTO usage_events (
-         api_key_id, provider, model, prompt_tokens, completion_tokens,
-         total_tokens, cost, latency_ms, fallback_used
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [
-        input.apiKeyId,
-        input.provider,
-        input.model,
-        input.promptTokens,
-        input.completionTokens,
+      await client.query(
+        `INSERT INTO key_usage (
+           api_key_id, request_count, prompt_tokens, completion_tokens, total_tokens, last_request_at
+         ) VALUES ($1, 1, $2, $3, $4, NOW())
+         ON CONFLICT (api_key_id) DO UPDATE SET
+           request_count = key_usage.request_count + 1,
+           prompt_tokens = key_usage.prompt_tokens + EXCLUDED.prompt_tokens,
+           completion_tokens = key_usage.completion_tokens + EXCLUDED.completion_tokens,
+           total_tokens = key_usage.total_tokens + EXCLUDED.total_tokens,
+           last_request_at = NOW()`,
+        [input.apiKeyId, input.promptTokens, input.completionTokens, totalTokens],
+      );
+
+      const inserted = await client.query<{
+        id: string;
+        created_at: Date;
+      }>(
+        `INSERT INTO usage_events (
+           api_key_id, provider, model, prompt_tokens, completion_tokens,
+           total_tokens, cost, latency_ms, fallback_used
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id, created_at`,
+        [
+          input.apiKeyId,
+          input.provider,
+          input.model,
+          input.promptTokens,
+          input.completionTokens,
+          totalTokens,
+          cost,
+          input.latencyMs,
+          input.fallbackUsed,
+        ],
+      );
+
+      const row = inserted.rows[0]!;
+      const createdAt = row.created_at.toISOString();
+      const receiptHash = hashReceipt({
+        id: row.id,
+        provider: input.provider,
+        model: input.model,
+        promptTokens: input.promptTokens,
+        completionTokens: input.completionTokens,
         totalTokens,
-        input.cost ?? 0,
-        input.latencyMs,
-        input.fallbackUsed,
-      ],
-    );
+        cost,
+        latencyMs: input.latencyMs,
+        fallbackUsed: input.fallbackUsed,
+        createdAt,
+      });
+
+      await client.query(
+        `UPDATE usage_events SET receipt_hash = $2 WHERE id = $1`,
+        [row.id, receiptHash],
+      );
+
+      await client.query("COMMIT");
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   async getUsage(apiKeyId: string): Promise<KeyUsageStats | null> {

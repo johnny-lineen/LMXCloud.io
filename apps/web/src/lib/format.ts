@@ -48,3 +48,11 @@ export function txExplorerUrl(chain: string, txHash: string): string {
       : "https://basescan.org/tx/";
   return `${base}${txHash}`;
 }
+
+export function contractExplorerUrl(chainId: number, address: string): string {
+  const base =
+    chainId === 84532
+      ? "https://sepolia.basescan.org/address/"
+      : "https://basescan.org/address/";
+  return `${base}${address}`;
+}

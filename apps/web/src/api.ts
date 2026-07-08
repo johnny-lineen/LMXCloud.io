@@ -302,6 +302,17 @@ export async function fetchUsageLogs(
 
 }
 
+export async function fetchUsageLogProof(
+  token: string,
+  logId: string,
+): Promise<UsageLogProofResponse> {
+  const res = await fetch(`${API_BASE}/v1/usage/logs/${logId}/proof`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<UsageLogProofResponse>;
+}
+
 
 
 export interface ProviderStatusInfo {
@@ -312,10 +323,42 @@ export interface ProviderStatusInfo {
   last_check: number | null;
 }
 
+export interface StatusAnchoringInfo {
+  enabled: boolean;
+  chain_id?: number;
+  contract_address?: string;
+  recent_roots?: Array<{
+    root: string;
+    tx_hash: string | null;
+    event_count: number;
+    anchored_at: string | null;
+  }>;
+}
+
 export interface StatusResponse {
   object: "status";
   providers: Record<string, ProviderStatusInfo>;
   fallback_chain: string[];
+  anchoring: StatusAnchoringInfo;
+}
+
+export interface UsageLogProofResponse {
+  object: "usage_log_proof";
+  log_id: string;
+  status: "no_receipt" | "pending" | "anchored";
+  receipt_version: string;
+  receipt: Record<string, unknown> | null;
+  receipt_hash: string | null;
+  leaf_index: number | null;
+  merkle_proof: string[] | null;
+  merkle_root: string | null;
+  anchor: {
+    chain_id: number;
+    contract_address: string;
+    tx_hash: string;
+    block_number: string | null;
+    anchored_at: string | null;
+  } | null;
 }
 
 export interface ModelInfo {

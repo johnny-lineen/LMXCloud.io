@@ -1,4 +1,4 @@
-import { Activity, ArrowRight, RefreshCw } from "lucide-react";
+import { Activity, ArrowRight, Link2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { API_BASE, fetchStatus, type StatusResponse } from "../api";
@@ -17,13 +17,25 @@ import { AlertBanner } from "../components/console/AlertBanner";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
-import { formatDateTime, formatLatency } from "../lib/format";
+import { formatDateTime, formatLatency, contractExplorerUrl } from "../lib/format";
 
 const POLL_MS = 30_000;
 
 function formatLastCheck(timestamp: number | null): string {
   if (timestamp === null) return "—";
   return formatDateTime(new Date(timestamp).toISOString());
+}
+
+function chainLabel(chainId: number): string {
+  return chainId === 84532 ? "Base Sepolia" : "Base";
+}
+
+function txUrl(chainId: number, txHash: string): string {
+  const base =
+    chainId === 84532
+      ? "https://sepolia.basescan.org/tx/"
+      : "https://basescan.org/tx/";
+  return `${base}${txHash}`;
 }
 
 export function StatusPage() {
@@ -150,6 +162,80 @@ export function StatusPage() {
                 );
               })}
             </div>
+          </Card>
+        )}
+
+        {status?.anchoring?.enabled && (
+          <Card className="mt-8">
+            <div className="flex flex-wrap items-center gap-2">
+              <Link2 className="h-4 w-4 text-primary" strokeWidth={1.75} />
+              <p className="text-body-sm font-medium text-on-surface">
+                Verifiable log anchoring
+              </p>
+              <span className="text-body-sm text-on-surface-faint">
+                · {chainLabel(status.anchoring.chain_id ?? 8453)}
+              </span>
+            </div>
+            <p className="mt-3 text-body-sm text-on-surface-muted">
+              Inference routing metadata is batched into Merkle trees and anchored on-chain.
+              Contract:{" "}
+              <a
+                href={contractExplorerUrl(
+                  status.anchoring.chain_id ?? 8453,
+                  status.anchoring.contract_address ?? "",
+                )}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-primary hover:underline"
+              >
+                {status.anchoring.contract_address}
+              </a>
+            </p>
+            {status.anchoring.recent_roots && status.anchoring.recent_roots.length > 0 ? (
+              <div className="mt-6">
+                <DataTable title="Recent anchored roots" minWidth={720}>
+                  <DataTableHead>
+                    <tr>
+                      <DataTableTh>Merkle root</DataTableTh>
+                      <DataTableTh>Receipts</DataTableTh>
+                      <DataTableTh>Anchored</DataTableTh>
+                      <DataTableTh>Transaction</DataTableTh>
+                    </tr>
+                  </DataTableHead>
+                  <DataTableBody>
+                    {status.anchoring.recent_roots.map((root) => (
+                      <DataTableRow key={root.root}>
+                        <DataTableCell mono className="max-w-[200px] truncate">
+                          {root.root}
+                        </DataTableCell>
+                        <DataTableCell>{root.event_count}</DataTableCell>
+                        <DataTableCell>
+                          {formatDateTime(root.anchored_at)}
+                        </DataTableCell>
+                        <DataTableCell>
+                          {root.tx_hash && root.tx_hash !== "0x0" ? (
+                            <a
+                              href={txUrl(status.anchoring!.chain_id ?? 8453, root.tx_hash)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-body-sm text-primary hover:underline"
+                            >
+                              View
+                            </a>
+                          ) : (
+                            "—"
+                          )}
+                        </DataTableCell>
+                      </DataTableRow>
+                    ))}
+                  </DataTableBody>
+                </DataTable>
+              </div>
+            ) : (
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                No roots anchored yet — send inference and wait for the next batch.
+              </p>
+            )}
           </Card>
         )}
 

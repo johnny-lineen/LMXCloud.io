@@ -164,7 +164,7 @@ const MCP_ONBOARDING_STEPS = [
   {
     step: "03",
     title: "Run chat_completion",
-    body: "Call list_models, then run chat_completion with model deepseek-v3.2 to confirm end-to-end routing.",
+    body: "Call list_models, then run chat_completion with model llama-3-70b to confirm end-to-end routing.",
   },
 ];
 

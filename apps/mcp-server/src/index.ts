@@ -15,7 +15,7 @@ import {
 } from "./lmx-client.js";
 import { runWithRequestContext } from "./request-context.js";
 
-const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "deepseek-v3.2";
+const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "llama-3-70b";
 const MCP_TRANSPORT = (process.env.LMX_MCP_TRANSPORT ?? "stdio") as "stdio" | "http";
 const MCP_HOST = process.env.LMX_MCP_HOST ?? "0.0.0.0";
 const MCP_PORT = Number(process.env.PORT ?? process.env.LMX_MCP_PORT ?? 3334);

@@ -25,7 +25,7 @@ Server:
 
 - `LMX_API_BASE_URL` (default: `http://127.0.0.1:3000`)
 - `LMX_ADMIN_API_KEY` (optional server fallback for smoke tests)
-- `LMX_DEFAULT_MODEL` (default: `deepseek-v3.2`)
+- `LMX_DEFAULT_MODEL` (default: `llama-3-70b`)
 - `LMX_MCP_TRANSPORT` (`stdio` or `http`, default: `stdio`)
 - `LMX_MCP_HOST` (HTTP mode only, default: `0.0.0.0`)
 - `LMX_MCP_PORT` (HTTP mode only, default: `3334`)

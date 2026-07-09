@@ -269,7 +269,7 @@ console.log(response.choices[0].message.content);`}
       "env": {
         "LMX_API_BASE_URL": "${EXAMPLE_BASE}",
         "LMX_API_KEY": "lmx_YOUR_KEY",
-        "LMX_DEFAULT_MODEL": "deepseek-v3.2"
+        "LMX_DEFAULT_MODEL": "llama-3-70b"
       }
     }
   }
@@ -285,7 +285,7 @@ console.log(response.choices[0].message.content);`}
                 <CodeBlock title="Suggested test flow">
                   {`1) list_models
 2) get_pricing
-3) chat_completion(prompt="Reply with exactly: MCP test passed.", model="deepseek-v3.2")`}
+3) chat_completion(prompt="Reply with exactly: MCP test passed.", model="llama-3-70b")`}
                 </CodeBlock>
               </div>
             </DocSection>

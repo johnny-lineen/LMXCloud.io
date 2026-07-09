@@ -4,9 +4,17 @@ Lightweight MCP server for LMX Cloud.
 
 ## What it exposes
 
-- `get_pricing`: calls `GET /v1/pricing` (public)
-- `list_models`: calls `GET /v1/models` (public)
-- `chat_completion`: calls `POST /v1/chat/completions` (requires user API key)
+| Tool | API | Auth |
+|------|-----|------|
+| `get_pricing` | `GET /v1/pricing` | Public |
+| `quote_price` | `GET /v1/pricing?model=...` | Public |
+| `list_models` | `GET /v1/models` | Public |
+| `get_status` | `GET /v1/status` | Public |
+| `get_balance` | `GET /v1/balance` | API key required |
+| `get_usage` | `GET /v1/usage` | API key required |
+| `chat_completion` | `POST /v1/chat/completions` | API key required |
+
+Suggested agent flow: `get_status` → `list_models` → `quote_price` → `get_balance` → `chat_completion` → `get_usage`.
 
 ## Per-user API key passthrough
 

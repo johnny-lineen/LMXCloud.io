@@ -167,6 +167,9 @@ export function KeysPage() {
               Generate a key, then copy this config into a different repository&apos;s{" "}
               <code className="text-mono-sm">.cursor/mcp.json</code>. Your key is sent via{" "}
               <code className="text-mono-sm">Authorization</code> so usage bills to your account.
+              Smoke test: <code className="text-mono-sm">get_balance</code> →{" "}
+              <code className="text-mono-sm">chat_completion</code> →{" "}
+              <code className="text-mono-sm">get_usage</code>.
             </p>
           </div>
           <Button

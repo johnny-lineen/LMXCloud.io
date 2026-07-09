@@ -29,7 +29,7 @@ Not like CoreWeave, which owns hardware and carries capital expenditure. LMX Clo
 Three channels, chosen deliberately, in this order:
 
 1. **x402 Bazaar + Agentic.Market** — Coinbase's protocol-level discovery layer for x402-paid services. Any agent using x402 can find LMX Cloud here regardless of what framework built it. Widest reach for the least integration effort.
-2. **An MCP server** — exposes LMX Cloud as a callable paid tool to any MCP-compatible agent (Claude, ChatGPT agents, custom LangChain agents), not just crypto-native ones. The widest possible net.
+2. **An MCP server** — exposes LMX Cloud as callable tools to any MCP-compatible agent (Claude, ChatGPT agents, custom LangChain agents). Shipped v1 (2026-07-09): hosted at `mcp.lmxcloud.io`, seven tools covering status, pricing, balance, usage, and inference. Remaining: x402 per-call payments and registry listing.
 3. **An ElizaOS plugin** — listed in the ElizaOS plugin registry, wrapping our existing OpenAI-compatible endpoint with wallet-native key minting. Framework-specific and higher-touch, deliberately sequenced last as a reference case study once the payment plumbing is proven.
 
 Virtuals Protocol (its Agent Commerce Protocol) is explicitly out of scope for now — a bespoke on-chain escrow/job system, not confirmed to run over x402, meaningfully heavier to build against. Revisit only once the first three channels show real traffic. Autonolas, Fetch.ai, and Bittensor are longer-tail and not pursued yet either.

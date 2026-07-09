@@ -206,17 +206,33 @@ console.log(response.choices[0].message.content);`}
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-body-sm text-on-surface-muted">
                 <li>
-                  <code className="text-mono-sm">get_pricing</code> — fetches{" "}
-                  <code className="text-mono-sm">GET /v1/pricing</code>
+                  <code className="text-mono-sm">get_pricing</code> — full pricing catalog (
+                  <code className="text-mono-sm">GET /v1/pricing</code>)
                 </li>
                 <li>
-                  <code className="text-mono-sm">list_models</code> — fetches{" "}
-                  <code className="text-mono-sm">GET /v1/models</code>
+                  <code className="text-mono-sm">quote_price</code> — single-call USDC quote for a
+                  model (
+                  <code className="text-mono-sm">GET /v1/pricing?model=...</code>)
                 </li>
                 <li>
-                  <code className="text-mono-sm">chat_completion</code> — calls{" "}
-                  <code className="text-mono-sm">POST /v1/chat/completions</code> with model
-                  pre-validation against live supported models
+                  <code className="text-mono-sm">list_models</code> — supported model aliases (
+                  <code className="text-mono-sm">GET /v1/models</code>)
+                </li>
+                <li>
+                  <code className="text-mono-sm">get_status</code> — provider health and fallback
+                  chain (<code className="text-mono-sm">GET /v1/status</code>)
+                </li>
+                <li>
+                  <code className="text-mono-sm">get_balance</code> — caller credit balance (
+                  <code className="text-mono-sm">GET /v1/balance</code>, key required)
+                </li>
+                <li>
+                  <code className="text-mono-sm">get_usage</code> — caller usage totals (
+                  <code className="text-mono-sm">GET /v1/usage</code>, key required)
+                </li>
+                <li>
+                  <code className="text-mono-sm">chat_completion</code> — run inference (
+                  <code className="text-mono-sm">POST /v1/chat/completions</code>, key required)
                 </li>
               </ul>
 
@@ -245,8 +261,9 @@ console.log(response.choices[0].message.content);`}
                 <Link to="/console/keys" className="text-primary hover:text-primary-hover">
                   console
                 </Link>
-                , then run <code className="text-mono-sm">chat_completion</code>. Missing or invalid
-                keys return clear MCP errors before inference is attempted.
+                , fund your balance, then call <code className="text-mono-sm">get_balance</code> and{" "}
+                <code className="text-mono-sm">chat_completion</code>. Missing or invalid keys return
+                clear MCP errors before inference is attempted.
               </p>
 
               <h3 className="mt-8 text-title-md text-on-surface">Local dev fallback</h3>
@@ -283,11 +300,18 @@ console.log(response.choices[0].message.content);`}
               </p>
               <div className="mt-4">
                 <CodeBlock title="Suggested test flow">
-                  {`1) list_models
-2) get_pricing
-3) chat_completion(prompt="Reply with exactly: MCP test passed.", model="llama-3-70b")`}
+                  {`1) get_status
+2) list_models
+3) quote_price(model="llama-3-70b", max_tokens=512, prompt_tokens=200)
+4) get_balance
+5) chat_completion(prompt="Reply with exactly: MCP test passed.", model="llama-3-70b")
+6) get_usage`}
                 </CodeBlock>
               </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                A passing run confirms provider health, model discovery, quoting, balance checks,
+                inference billing, and usage accounting — all through MCP with your API key.
+              </p>
             </DocSection>
 
             <DocSection id="authentication" title="Authentication">

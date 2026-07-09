@@ -74,7 +74,7 @@ Positioning: **"AWS for Web3"** — Web3-native infrastructure for autonomous AI
    - **Abuse/load hardening** — replay protection landed; still need burst/load validation on anonymous x402 path.
    - **Payer visibility decision** — internal-only vs wallet-queryable per-call payment history; extend billing/usage UI if needed.
 5. **Phase 1 Goal 1** — Bazaar + Agentic.Market listing (after legal + Sprint 3 mainnet canary green).
-6. **Phase 1 Goal 2** — MCP server.
+6. **Phase 1 Goal 2** — MCP server (**v1 shipped 2026-07-09** — balance-funded, hosted HTTP, 7 tools, E2E agent-tested; remaining: x402 per-call + registry listing).
 7. **Phase 1 Goal 3** — ElizaOS plugin.
 8. **Week 4 outreach prep** — depends on Web2-vs-Web3 sequencing decision.
 9. **Polish** — mainnet anchor deploy, LogsPage proof link, distributed rate limiting if scaling past one instance.
@@ -217,9 +217,25 @@ Build per-call x402 payment support on the inference endpoints (starting with `c
 
 ### Goal 2 — MCP server
 
-Expose an MCP server wrapping the same x402-paid endpoint from Goal 1 (a `search_resources`/call-tool pattern, matching how Bazaar itself is exposed as an MCP server). This is a thin layer on top of Goal 1's payment work, not a second payment system — sequence it immediately after.
+**Shipped (v1, 2026-07-09):** hosted Streamable HTTP MCP at `https://mcp.lmxcloud.io/mcp` with per-user `Authorization: Bearer lmx_...` passthrough, rate limits, and structured caller logging. Seven tools cover the full agent lifecycle on the existing balance-funded API:
 
-**Definition of done:** any MCP-compatible agent can discover LMX Cloud through the MCP registry ecosystem and call it as a paid tool, using the same per-call payment flow as Goal 1.
+| Tool | Purpose |
+|------|---------|
+| `get_status` | Provider health + fallback chain |
+| `list_models` | Live model catalog |
+| `get_pricing` | Full pricing catalog |
+| `quote_price` | Single-call USDC estimate |
+| `get_balance` | Caller credit balance |
+| `get_usage` | Caller usage totals |
+| `chat_completion` | Run inference (bills caller's key) |
+
+**E2E validated:** external demo repo agent ran the full 6-step smoke suite (status → models → quote → balance → completion → usage) through MCP.
+
+**Still open for Goal 2 "done":**
+- Wrap the x402 per-call endpoint from Goal 1 (today MCP uses pre-funded API key balance, not pay-per-request stablecoin).
+- Publish/discover in the MCP registry ecosystem (Bazaar listing gate still applies).
+
+**Definition of done (full Goal 2):** any MCP-compatible agent can discover LMX Cloud through the MCP registry ecosystem and call it as a paid tool, using the same per-call payment flow as Goal 1.
 
 ### Goal 3 — ElizaOS plugin
 
@@ -281,9 +297,12 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 
 ### Distribution Sprint 5 — Goal 2: MCP server
 
-- [ ] Build an MCP server wrapping the same x402-paid endpoint (`search_resources`/call-tool pattern, matching Bazaar's own MCP exposure).
+- [x] Build MCP server — balance-funded v1 at `apps/mcp-server`, hosted HTTP on Railway, 7 tools (`get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`).
+- [x] Per-user API key passthrough via `Authorization` header (server `LMX_ADMIN_API_KEY` fallback only).
+- [x] Tested end-to-end with a real MCP client agent (6-step smoke suite passed in external demo repo).
+- [x] Docs + console keys page MCP onboarding (`/docs#mcp`, Keys "Use with MCP" config copy).
+- [ ] Wrap x402 per-call payment endpoint when Goal 1 ships (upgrade `chat_completion` to support 402 flow).
 - [ ] Published/discoverable in the MCP registry ecosystem.
-- [ ] Tested end-to-end with a real MCP client agent, not just a manual curl test.
 
 ### Distribution Sprint 6 — Goal 3: ElizaOS plugin
 

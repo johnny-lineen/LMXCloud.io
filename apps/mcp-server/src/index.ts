@@ -10,6 +10,7 @@ import {
   getSupportedModels,
   guardToolAccess,
   normalizeMessageContent,
+  pricingQuotePath,
   validateApiKey,
   type LmxChatResponse,
 } from "./lmx-client.js";
@@ -28,6 +29,16 @@ const optionalApiKeySchema = z
     "Optional LMX API key (lmx_...). Prefer MCP client Authorization header or env; use this to override per call.",
   );
 
+function jsonToolContent(data: unknown) {
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
+  };
+}
+
+function toolError(message: string) {
+  return { isError: true as const, content: [{ type: "text" as const, text: message }] };
+}
+
 function requestContextFromHttp(req: IncomingMessage) {
   const authorizationHeader = req.headers.authorization;
   return {
@@ -40,7 +51,7 @@ function requestContextFromHttp(req: IncomingMessage) {
 function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
   const server = new McpServer({
     name: "lmxcloud-mcp",
-    version: "0.2.0",
+    version: "0.3.0",
   });
 
   server.tool(
@@ -80,9 +91,65 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
         return { isError: true, content: [{ type: "text", text: pricing.error }] };
       }
 
-      return {
-        content: [{ type: "text", text: JSON.stringify(pricing.data, null, 2) }],
-      };
+      return jsonToolContent(pricing.data);
+    },
+  );
+
+  server.tool(
+    "quote_price",
+    "Estimate USDC cost for a single model call. Uses GET /v1/pricing with model and token params.",
+    {
+      model: z.string().min(1).describe("Model alias to quote (e.g. llama-3-70b)."),
+      max_tokens: z
+        .number()
+        .int()
+        .positive()
+        .max(4096)
+        .optional()
+        .describe("Optional max completion tokens for the quote."),
+      prompt_tokens: z
+        .number()
+        .int()
+        .positive()
+        .max(128_000)
+        .optional()
+        .describe("Optional estimated prompt tokens (default: 1)."),
+      api_key: optionalApiKeySchema,
+    },
+    async ({ model, max_tokens, prompt_tokens, api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "quote_price",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: false,
+      });
+      if (!access.ok) {
+        return toolError(access.message);
+      }
+
+      const quote = await fetchJson<unknown>(
+        pricingQuotePath({ model, max_tokens, prompt_tokens }),
+        {
+          method: "GET",
+          headers: { Accept: "application/json" },
+        },
+      );
+
+      logToolEvent({
+        tool: "quote_price",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok: quote.ok,
+        latencyMs: Date.now() - started,
+        detail: quote.ok ? undefined : quote.error,
+      });
+
+      if (!quote.ok) {
+        return toolError(quote.error);
+      }
+
+      return jsonToolContent(quote.data);
     },
   );
 
@@ -125,23 +192,138 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
       }
 
       const data = models.data.data ?? [];
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              {
-                object: "list",
-                default_model: DEFAULT_MODEL,
-                count: data.length,
-                data,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return jsonToolContent({
+        object: "list",
+        default_model: DEFAULT_MODEL,
+        count: data.length,
+        data,
+      });
+    },
+  );
+
+  server.tool(
+    "get_status",
+    "Fetch LMX Cloud provider health, fallback chain, and anchoring status.",
+    {
+      api_key: optionalApiKeySchema,
+    },
+    async ({ api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "get_status",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: false,
+      });
+      if (!access.ok) {
+        return toolError(access.message);
+      }
+
+      const status = await fetchJson<unknown>("/v1/status", {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      });
+
+      logToolEvent({
+        tool: "get_status",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok: status.ok,
+        latencyMs: Date.now() - started,
+        detail: status.ok ? undefined : status.error,
+      });
+
+      if (!status.ok) {
+        return toolError(status.error);
+      }
+
+      return jsonToolContent(status.data);
+    },
+  );
+
+  server.tool(
+    "get_balance",
+    "Fetch USD credit balance for the caller API key. Requires authentication.",
+    {
+      api_key: optionalApiKeySchema,
+    },
+    async ({ api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "get_balance",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: true,
+      });
+      if (!access.ok) {
+        return toolError(access.message);
+      }
+
+      const balance = await fetchJson<unknown>("/v1/balance", {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${access.auth.apiKey}`,
+        },
+      });
+
+      logToolEvent({
+        tool: "get_balance",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok: balance.ok,
+        latencyMs: Date.now() - started,
+        detail: balance.ok ? undefined : balance.error,
+      });
+
+      if (!balance.ok) {
+        return toolError(balance.error);
+      }
+
+      return jsonToolContent(balance.data);
+    },
+  );
+
+  server.tool(
+    "get_usage",
+    "Fetch request and token usage totals for the caller API key. Requires authentication.",
+    {
+      api_key: optionalApiKeySchema,
+    },
+    async ({ api_key }) => {
+      const started = Date.now();
+      const access = guardToolAccess({
+        tool: "get_usage",
+        transport: transportMode,
+        toolApiKey: api_key,
+        requireApiKey: true,
+      });
+      if (!access.ok) {
+        return toolError(access.message);
+      }
+
+      const usage = await fetchJson<unknown>("/v1/usage", {
+        method: "GET",
+        headers: {
+          Accept: "application/json",
+          Authorization: `Bearer ${access.auth.apiKey}`,
+        },
+      });
+
+      logToolEvent({
+        tool: "get_usage",
+        callerId: access.auth.callerId,
+        source: access.auth.source,
+        ok: usage.ok,
+        latencyMs: Date.now() - started,
+        detail: usage.ok ? undefined : usage.error,
+      });
+
+      if (!usage.ok) {
+        return toolError(usage.error);
+      }
+
+      return jsonToolContent(usage.data);
     },
   );
 

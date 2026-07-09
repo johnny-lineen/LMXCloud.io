@@ -94,6 +94,8 @@ Deploy MCP as a separate service so agent traffic does not couple to API contain
 4. Generate a Railway domain (example: `https://lmxcloud-mcp-production.up.railway.app`).
 5. Optional custom domain: `mcp.lmxcloud.io`.
 
+**Exposed tools:** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`. Users authenticate with `Authorization: Bearer lmx_...` in their MCP client config — do not rely on a shared server API key for production traffic.
+
 ### Verify MCP service
 
 ```powershell

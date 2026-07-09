@@ -64,6 +64,21 @@ export async function fetchJson<T>(
   }
 }
 
+export function pricingQuotePath(params: {
+  model: string;
+  max_tokens?: number;
+  prompt_tokens?: number;
+}): string {
+  const search = new URLSearchParams({ model: params.model });
+  if (params.max_tokens !== undefined) {
+    search.set("max_tokens", String(params.max_tokens));
+  }
+  if (params.prompt_tokens !== undefined) {
+    search.set("prompt_tokens", String(params.prompt_tokens));
+  }
+  return `/v1/pricing?${search.toString()}`;
+}
+
 export async function getSupportedModels(apiKey?: string) {
   return fetchJson<LmxModelsResponse>("/v1/models", {
     method: "GET",

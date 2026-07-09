@@ -154,7 +154,7 @@ const MCP_ONBOARDING_STEPS = [
   {
     step: "01",
     title: "Get an API key",
-    body: "Create a key from the console and keep it in your local MCP config as LMX_API_KEY.",
+    body: "Create a key from the console and fund your balance for inference.",
   },
   {
     step: "02",
@@ -163,8 +163,8 @@ const MCP_ONBOARDING_STEPS = [
   },
   {
     step: "03",
-    title: "Run chat_completion",
-    body: "Call list_models, then run chat_completion with model llama-3-70b to confirm end-to-end routing.",
+    title: "Check balance and run",
+    body: "Call get_balance, quote_price, then chat_completion with llama-3-70b to confirm end-to-end routing and billing.",
   },
 ];
 

@@ -150,17 +150,38 @@ Open [http://localhost:5173](http://localhost:5173) — redirects to sign in or 
 
 ## MCP server (`apps/mcp-server`)
 
-LMX ships an MCP server with tools for pricing, model discovery, and chat completions.
+LMX ships a hosted MCP server so agents can discover pricing, check balance, and run inference as tools — no hand-written REST calls.
+
+**Production:** `https://mcp.lmxcloud.io/mcp` (health: `/healthz`)
+
+**Tools (7):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`
+
+**Client config** (`.cursor/mcp.json` in any repo):
+
+```json
+{
+  "mcpServers": {
+    "lmxcloud": {
+      "url": "https://mcp.lmxcloud.io/mcp",
+      "headers": {
+        "Authorization": "Bearer lmx_YOUR_KEY"
+      }
+    }
+  }
+}
+```
+
+Create a key at [lmxcloud.io/console/keys](https://lmxcloud.io/console/keys). Full docs: `/docs#mcp`.
 
 ```bash
-# stdio (local Cursor / process-spawned)
+# stdio (local dev)
 pnpm dev:mcp
 
-# hosted streamable HTTP (distribution)
+# hosted streamable HTTP (local)
 pnpm dev:mcp:http
 ```
 
-HTTP mode endpoints:
+HTTP mode endpoints (local):
 
 - `http://127.0.0.1:3334/mcp`
 - `http://127.0.0.1:3334/healthz`

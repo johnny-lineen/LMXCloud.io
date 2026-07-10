@@ -383,6 +383,7 @@ export interface UsageLogProofResponse {
   object: "usage_log_proof";
   log_id: string;
   status: "no_receipt" | "pending" | "anchored";
+  anchoring_enabled?: boolean;
   receipt_version: string;
   receipt: Record<string, unknown> | null;
   receipt_hash: string | null;

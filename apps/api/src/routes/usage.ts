@@ -137,10 +137,10 @@ export async function registerUsageRoutes(
     "/v1/usage/logs/:id/proof",
     { preHandler: deps.authenticate },
     async (request, reply) => {
-      if (!deps.anchorStore || !deps.anchorContractAddress) {
+      if (!deps.anchorStore) {
         return reply.status(503).send({
           error: {
-            message: "Log anchoring is not configured on this server",
+            message: "Proof lookup requires Postgres storage on this server",
             type: "configuration_error",
           },
         });
@@ -148,10 +148,13 @@ export async function registerUsageRoutes(
 
       const keys = await deps.apiKeyStore.listForRecord(request.apiKey!);
       const keyIds = keys.map((key) => key.id);
+      const contractAddress =
+        deps.anchorContractAddress ??
+        ("0x0000000000000000000000000000000000000000" as `0x${string}`);
       const proof = await deps.anchorStore.getLogProof(
         request.params.id,
         keyIds,
-        deps.anchorContractAddress,
+        contractAddress,
       );
 
       if (!proof) {
@@ -163,7 +166,10 @@ export async function registerUsageRoutes(
         });
       }
 
-      return serializeProof(proof);
+      return {
+        ...serializeProof(proof),
+        anchoring_enabled: Boolean(deps.anchorContractAddress),
+      };
     },
   );
 }

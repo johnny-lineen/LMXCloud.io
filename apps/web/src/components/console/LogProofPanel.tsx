@@ -12,6 +12,7 @@ import { verifyReceiptCli } from "../../lib/snippets";
 
 interface LogProofPanelProps {
   logId: string;
+  anchoringEnabled?: boolean;
   onClose: () => void;
 }
 
@@ -23,7 +24,7 @@ function proofStatusTone(
   return "default";
 }
 
-export function LogProofPanel({ logId, onClose }: LogProofPanelProps) {
+export function LogProofPanel({ logId, anchoringEnabled, onClose }: LogProofPanelProps) {
   const { apiKey } = useAuth();
   const [proof, setProof] = useState<UsageLogProofResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,12 +82,32 @@ export function LogProofPanel({ logId, onClose }: LogProofPanelProps) {
 
       {proof && !loading && (
         <div className="mt-4 space-y-4">
+          {proof.anchoring_enabled === false && proof.status === "pending" && (
+            <AlertBanner tone="info">
+              Receipt hash is recorded. On-chain Merkle anchoring is not enabled on this
+              deployment yet — proofs will be available once the anchor contract is configured.
+            </AlertBanner>
+          )}
+
+          {anchoringEnabled === false && proof.anchoring_enabled === undefined && (
+            <AlertBanner tone="info">
+              On-chain anchoring is not enabled on this deployment. Receipt metadata is still
+              available below.
+            </AlertBanner>
+          )}
+
           <div className="flex flex-wrap gap-2">
             <Chip tone={proofStatusTone(proof.status)}>{proof.status}</Chip>
             {proof.receipt_version && (
               <Chip tone="default">{proof.receipt_version}</Chip>
             )}
           </div>
+
+          {proof.status === "pending" && proof.anchoring_enabled !== false && (
+            <p className="text-body-sm text-on-surface-muted">
+              Receipt computed. Waiting for the next Merkle batch to anchor on-chain.
+            </p>
+          )}
 
           {proof.status === "no_receipt" && (
             <p className="text-body-sm text-on-surface-muted">

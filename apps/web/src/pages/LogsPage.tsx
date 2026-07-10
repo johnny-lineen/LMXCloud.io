@@ -1,6 +1,6 @@
 import { ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { fetchUsageLogs } from "../api";
+import { fetchStatus, fetchUsageLogs } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
 import {
   DataTable,
@@ -43,6 +43,7 @@ export function LogsPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proofLogId, setProofLogId] = useState<string | null>(null);
+  const [anchoringEnabled, setAnchoringEnabled] = useState<boolean | null>(null);
 
   const load = useCallback(async () => {
     if (!apiKey) return;
@@ -63,6 +64,12 @@ export function LogsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetchStatus()
+      .then((status) => setAnchoringEnabled(status.anchoring.enabled))
+      .catch(() => setAnchoringEnabled(null));
+  }, []);
 
   async function handleLoadMore() {
     if (!apiKey || !nextCursor || loadingMore) return;
@@ -101,8 +108,20 @@ export function LogsPage() {
 
       {error && <AlertBanner tone="error">{error}</AlertBanner>}
 
+      {anchoringEnabled === false && (
+        <AlertBanner tone="info">
+          On-chain log anchoring is not configured on this API deployment. Receipt hashes are
+          still recorded — Merkle proofs and Basescan verification will appear once anchoring is
+          enabled. See the public <a href="/status" className="text-primary hover:underline">status page</a> for updates.
+        </AlertBanner>
+      )}
+
       {proofLogId && (
-        <LogProofPanel logId={proofLogId} onClose={() => setProofLogId(null)} />
+        <LogProofPanel
+          logId={proofLogId}
+          anchoringEnabled={anchoringEnabled ?? undefined}
+          onClose={() => setProofLogId(null)}
+        />
       )}
 
       <DataTable minWidth={1040}>

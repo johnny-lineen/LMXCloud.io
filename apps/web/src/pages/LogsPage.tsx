@@ -1,3 +1,4 @@
+import { ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { fetchUsageLogs } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
@@ -10,6 +11,7 @@ import {
   DataTableRow,
   DataTableTh,
 } from "../components/console/DataTable";
+import { LogProofPanel } from "../components/console/LogProofPanel";
 import { PageHeader } from "../components/console/PageHeader";
 import { Button } from "../components/ui/Button";
 import { Chip } from "../components/ui/Chip";
@@ -40,6 +42,7 @@ export function LogsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [proofLogId, setProofLogId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!apiKey) return;
@@ -86,7 +89,7 @@ export function LogsPage() {
       <PageHeader
         eyebrow="Monitor"
         title="Request logs"
-        description="Individual API calls across all linked keys. Only successful completions are recorded."
+        description="Individual API calls across all linked keys. Verify anchored receipts on-chain."
         actions={
           <Tabs
             items={RANGE_OPTIONS.map((o) => ({ value: String(o.days), label: o.label }))}
@@ -98,7 +101,11 @@ export function LogsPage() {
 
       {error && <AlertBanner tone="error">{error}</AlertBanner>}
 
-      <DataTable minWidth={960}>
+      {proofLogId && (
+        <LogProofPanel logId={proofLogId} onClose={() => setProofLogId(null)} />
+      )}
+
+      <DataTable minWidth={1040}>
         <DataTableHead>
           <tr>
             <DataTableTh>Time</DataTableTh>
@@ -110,13 +117,14 @@ export function LogsPage() {
             <DataTableTh>Cost</DataTableTh>
             <DataTableTh>Latency</DataTableTh>
             <DataTableTh>Status</DataTableTh>
+            <DataTableTh className="text-right">Proof</DataTableTh>
           </tr>
         </DataTableHead>
         <DataTableBody>
           {loading ? (
-            <DataTableEmpty colSpan={9}>Loading request logs…</DataTableEmpty>
+            <DataTableEmpty colSpan={10}>Loading request logs…</DataTableEmpty>
           ) : logs.length === 0 ? (
-            <DataTableEmpty colSpan={9}>
+            <DataTableEmpty colSpan={10}>
               No requests in this period. Send inference calls to populate logs.
             </DataTableEmpty>
           ) : (
@@ -152,6 +160,17 @@ export function LogsPage() {
                       fallback
                     </Chip>
                   )}
+                </DataTableCell>
+                <DataTableCell className="text-right">
+                  <Button
+                    type="button"
+                    variant="tertiary"
+                    size="sm"
+                    onClick={() => setProofLogId(log.id)}
+                  >
+                    <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    Verify
+                  </Button>
                 </DataTableCell>
               </DataTableRow>
             ))

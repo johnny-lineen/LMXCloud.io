@@ -49,6 +49,10 @@ export function txExplorerUrl(chain: string, txHash: string): string {
   return `${base}${txHash}`;
 }
 
+export function txExplorerUrlForChainId(chainId: number, txHash: string): string {
+  return txExplorerUrl(chainId === 84532 ? "base-sepolia" : "base", txHash);
+}
+
 export function contractExplorerUrl(chainId: number, address: string): string {
   const base =
     chainId === 84532

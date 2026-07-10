@@ -1,7 +1,9 @@
 import {
   BarChart3,
+  Boxes,
   CreditCard,
   ExternalLink,
+  FlaskConical,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -24,6 +26,13 @@ const NAV = [
     items: [
       { to: "/console/overview", label: "Overview", icon: LayoutDashboard, end: true },
       { to: "/console/keys", label: "API Keys", icon: KeyRound },
+    ],
+  },
+  {
+    section: "Develop",
+    items: [
+      { to: "/console/playground", label: "Playground", icon: FlaskConical },
+      { to: "/console/models", label: "Models & pricing", icon: Boxes },
     ],
   },
   {

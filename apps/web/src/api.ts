@@ -6,6 +6,7 @@ import type {
   DepositHistoryResponse,
   KeysResponse,
   LoginResponse,
+  PaymentsResponse,
   UsageHistoryResponse,
   UsageLogsResponse,
   UsageResponse,
@@ -136,6 +137,24 @@ export async function fetchDepositHistory(token: string): Promise<DepositHistory
   });
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<DepositHistoryResponse>;
+}
+
+export async function fetchPayments(
+  token: string,
+  options: { limit?: number; cursor?: string; days?: number } = {},
+): Promise<PaymentsResponse> {
+  const params = new URLSearchParams();
+  if (options.limit !== undefined) params.set("limit", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.days !== undefined) params.set("days", String(options.days));
+  const query = params.toString();
+
+  const res = await fetch(
+    `${API_BASE}/v1/billing/payments${query ? `?${query}` : ""}`,
+    { headers: authHeaders(token) },
+  );
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<PaymentsResponse>;
 }
 
 
@@ -401,6 +420,27 @@ export async function fetchModels(): Promise<ModelsResponse> {
   const res = await fetch(`${API_BASE}/v1/models`);
   if (!res.ok) throw new Error(await parseError(res));
   return res.json() as Promise<ModelsResponse>;
+}
+
+export interface PricingModelEntry {
+  id: string;
+  provider: string;
+  list_price_per_1k_tokens: string;
+  cost_price_per_1k_tokens: string;
+}
+
+export interface PricingCatalogResponse {
+  currency: string;
+  network: string;
+  min_call_usdc: string;
+  default_max_completion_tokens: number;
+  models: PricingModelEntry[];
+}
+
+export async function fetchPricing(): Promise<PricingCatalogResponse> {
+  const res = await fetch(`${API_BASE}/v1/pricing`);
+  if (!res.ok) throw new Error(await parseError(res));
+  return res.json() as Promise<PricingCatalogResponse>;
 }
 
 export interface ChatMessage {

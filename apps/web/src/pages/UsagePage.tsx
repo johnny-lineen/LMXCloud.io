@@ -93,12 +93,14 @@ export function UsagePage() {
           title="Daily requests"
           labels={buckets.map((bucket) => bucket.date)}
           values={buckets.map((bucket) => bucket.requests)}
+          spanDays={days}
         />
         <BarChart
           title="Daily tokens"
           labels={buckets.map((bucket) => bucket.date)}
           values={buckets.map((bucket) => bucket.total_tokens)}
           color="var(--color-warning)"
+          spanDays={days}
           valueLabel={(value) => (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : String(value))}
         />
       </div>

@@ -4,12 +4,19 @@ import type {
   CreateQuotedPaymentInput,
   PaymentEvent,
   PaymentEventStatus,
+  PaymentsListQuery,
+  PaymentsListResult,
 } from "./types.js";
 
 export interface PaymentStore {
   createQuoted(input: CreateQuotedPaymentInput): Promise<PaymentEvent>;
   findByPayloadHash(payloadHash: string): Promise<PaymentEvent | null>;
   findById(id: string): Promise<PaymentEvent | null>;
+  listForAccount(
+    payerWallets: string[],
+    apiKeyIds: string[],
+    query: PaymentsListQuery,
+  ): Promise<PaymentsListResult>;
   markVerified(id: string, facilitatorRef?: string): Promise<PaymentEvent | null>;
   markSettled(
     id: string,
@@ -125,6 +132,61 @@ export class PostgresPaymentStore implements PaymentStore {
       [id],
     );
     return result.rows[0] ? mapRow(result.rows[0]) : null;
+  }
+
+  async listForAccount(
+    payerWallets: string[],
+    apiKeyIds: string[],
+    query: PaymentsListQuery,
+  ): Promise<PaymentsListResult> {
+    if (payerWallets.length === 0 && apiKeyIds.length === 0) {
+      return { data: [], hasMore: false, nextCursor: null };
+    }
+
+    const params: unknown[] = [
+      apiKeyIds,
+      payerWallets.map((wallet) => wallet.toLowerCase()),
+    ];
+    const filters = [
+      `(
+        (cardinality($2::text[]) > 0 AND payer_wallet = ANY($2::text[]))
+        OR (cardinality($1::uuid[]) > 0 AND api_key_id = ANY($1::uuid[]))
+      )`,
+    ];
+
+    if (query.days !== undefined) {
+      params.push(query.days);
+      filters.push(`created_at >= NOW() - ($${params.length}::int || ' days')::interval`);
+    }
+
+    if (query.cursor) {
+      params.push(query.cursor);
+      filters.push(
+        `(created_at, id) < (
+          SELECT created_at, id FROM payment_events WHERE id = $${params.length}::uuid
+        )`,
+      );
+    }
+
+    params.push(query.limit + 1);
+    const limitParam = `$${params.length}`;
+
+    const result = await getPool().query<PaymentEventRow>(
+      `SELECT * FROM payment_events
+       WHERE ${filters.join(" AND ")}
+       ORDER BY created_at DESC, id DESC
+       LIMIT ${limitParam}`,
+      params,
+    );
+
+    const hasMore = result.rows.length > query.limit;
+    const rows = hasMore ? result.rows.slice(0, query.limit) : result.rows;
+
+    return {
+      data: rows.map(mapRow),
+      hasMore,
+      nextCursor: hasMore && rows.length > 0 ? rows[rows.length - 1]!.id : null,
+    };
   }
 
   async markVerified(

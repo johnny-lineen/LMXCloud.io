@@ -1,7 +1,8 @@
 import { Check, Copy, KeyRound, Plus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
+import { API_BASE, createAccountApiKey, fetchKeys, revokeApiKey } from "../api";
 import { AlertBanner } from "../components/console/AlertBanner";
+import { CodeBlock } from "../components/console/CodeBlock";
 import {
   DataTable,
   DataTableBody,
@@ -17,6 +18,7 @@ import { Card } from "../components/ui/Card";
 import { Chip } from "../components/ui/Chip";
 import { useAuth } from "../context/AuthContext";
 import { formatDateTime, formatNumber, formatUsd, formatWallet } from "../lib/format";
+import { chatCompletionCurl, mcpConfig } from "../lib/snippets";
 import type { ApiKeyInfo } from "../types";
 
 export function KeysPage() {
@@ -32,22 +34,8 @@ export function KeysPage() {
   const mcpHostedUrl =
     import.meta.env.VITE_MCP_URL?.trim() || "https://mcp.lmxcloud.io/mcp";
 
-  const mcpConfig = newKey
-    ? JSON.stringify(
-        {
-          mcpServers: {
-            lmxcloud: {
-              url: mcpHostedUrl,
-              headers: {
-                Authorization: `Bearer ${newKey}`,
-              },
-            },
-          },
-        },
-        null,
-        2,
-      )
-    : null;
+  const mcpKey = newKey ?? apiKey;
+  const mcpConfigText = mcpKey ? mcpConfig(mcpKey, mcpHostedUrl) : null;
 
   const load = useCallback(async () => {
     if (!apiKey) return;
@@ -85,9 +73,9 @@ export function KeysPage() {
   }
 
   async function handleCopyMcpConfig() {
-    if (!mcpConfig) return;
+    if (!mcpConfigText) return;
     try {
-      await navigator.clipboard.writeText(mcpConfig);
+      await navigator.clipboard.writeText(mcpConfigText);
       setCopyState("copied");
       window.setTimeout(() => setCopyState("idle"), 2000);
     } catch {
@@ -159,14 +147,25 @@ export function KeysPage() {
         </Card>
       )}
 
+      {apiKey && (
+        <Card>
+          <p className="text-label-sm text-on-surface">Quick start</p>
+          <p className="mt-1 text-body-sm text-on-surface-muted">
+            Your session key works immediately — no need to create another unless you want rotation.
+          </p>
+          <div className="mt-4">
+            <CodeBlock label="cURL" code={chatCompletionCurl(API_BASE, apiKey, "llama-3.1-8b")} />
+          </div>
+        </Card>
+      )}
+
       <Card>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-label-sm text-on-surface">Use with MCP</p>
             <p className="mt-1 text-body-sm text-on-surface-muted">
-              Generate a key, then copy this config into a different repository&apos;s{" "}
-              <code className="text-mono-sm">.cursor/mcp.json</code>. Your key is sent via{" "}
-              <code className="text-mono-sm">Authorization</code> so usage bills to your account.
+              Copy into <code className="text-mono-sm">.cursor/mcp.json</code> or any MCP client.
+              Uses your session key by default; create a new key above to rotate.
               Smoke test: <code className="text-mono-sm">get_balance</code> →{" "}
               <code className="text-mono-sm">chat_completion</code> →{" "}
               <code className="text-mono-sm">get_usage</code>.
@@ -176,7 +175,7 @@ export function KeysPage() {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={!mcpConfig}
+            disabled={!mcpConfigText}
             onClick={() => void handleCopyMcpConfig()}
           >
             {copyState === "copied" ? (
@@ -193,13 +192,13 @@ export function KeysPage() {
           </Button>
         </div>
 
-        {mcpConfig ? (
+        {mcpConfigText ? (
           <pre className="mt-4 overflow-x-auto rounded-md border border-border bg-background p-4 text-mono-sm text-on-surface-muted">
-            <code>{mcpConfig}</code>
+            <code>{mcpConfigText}</code>
           </pre>
         ) : (
           <p className="mt-4 text-body-sm text-on-surface-muted">
-            Create a key first to generate a config with a real bearer token.
+            Sign in to generate MCP config with your bearer token.
           </p>
         )}
         {copyState === "error" && (

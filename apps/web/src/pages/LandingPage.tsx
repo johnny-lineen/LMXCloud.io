@@ -357,61 +357,37 @@ export function LandingPage() {
         </section>
 
         {/* Models */}
-        <section id="models" className="border-b border-border py-16 sm:py-20">
+        <section id="models" className="border-b border-border py-12 sm:py-16">
           <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)]">
-            <SectionHeader
-              eyebrow="Model catalog"
-              title={`${SUPPORTED_MODEL_LIST.length} models on DePIN compute`}
-              description="Short aliases route to io.net and AkashML upstream IDs. Models on both networks failover automatically; io.net-only models route when Akash is skipped."
-            />
-            <p className="mt-4 text-body-sm text-on-surface-muted">
-              Default: <code className="text-mono-sm">{DEFAULT_MODEL_ALIAS}</code> — try any alias in
-              the live demo or pass it as <code className="text-mono-sm">model</code> in your API
-              requests.
-            </p>
-            <div className="mt-10 space-y-10">
-              {CATEGORY_ORDER.map((category) => {
-                const models = MODELS_BY_CATEGORY[category];
-                if (!models?.length) return null;
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="max-w-2xl">
+                <SectionHeader
+                  eyebrow="Model catalog"
+                  title={`${SUPPORTED_MODEL_LIST.length} models on DePIN`}
+                  description={`Default ${DEFAULT_MODEL_ALIAS}. Short aliases route across io.net and AkashML with automatic failover.`}
+                />
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button to="/docs#models" variant="secondary" size="sm">
+                  Full reference
+                </Button>
+                <Button to="/status" variant="tertiary" size="sm">
+                  Provider status
+                </Button>
+              </div>
+            </div>
 
-                return (
-                  <div key={category}>
-                    <h3 className="text-title-md text-on-surface">
-                      {MODEL_CATEGORIES[category]}
-                    </h3>
-                    <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {models.map((model) => (
-                        <Card key={model.alias} className="flex flex-col gap-2">
-                          <div>
-                            <p className="text-body-sm font-medium text-on-surface">
-                              {model.label}
-                            </p>
-                            <p className="mt-1 text-mono-sm text-on-surface-muted">
-                              {model.alias}
-                            </p>
-                          </div>
-                          <div className="mt-auto flex flex-wrap gap-1.5">
-                            {model.providers.map((provider) => (
-                              <Chip key={provider} tone={provider === "akash" ? "info" : "default"}>
-                                {provider === "ionet" ? "io.net" : "AkashML"}
-                              </Chip>
-                            ))}
-                          </div>
-                        </Card>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Button to="/docs#models" variant="secondary" size="sm">
-                API model reference
-              </Button>
-              <Button to="/status" variant="tertiary" size="sm">
-                Provider status
-              </Button>
-            </div>
+            <Card className="mt-8 p-5 sm:p-6">
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {CATEGORY_ORDER.map((category) => (
+                  <ModelCategoryBlock
+                    key={category}
+                    category={category}
+                    models={MODELS_BY_CATEGORY[category]}
+                  />
+                ))}
+              </div>
+            </Card>
           </div>
         </section>
 
@@ -680,6 +656,36 @@ function AudienceCard({
         <ArrowRight className="h-3.5 w-3.5" strokeWidth={1.75} />
       </Button>
     </Card>
+  );
+}
+
+function ModelCategoryBlock({
+  category,
+  models,
+}: {
+  category: ModelCategory;
+  models?: SupportedModel[];
+}) {
+  if (!models?.length) return null;
+
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-label-sm font-medium text-on-surface">{MODEL_CATEGORIES[category]}</h3>
+        <span className="text-mono-sm text-on-surface-faint">{models.length}</span>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {models.map((model) => (
+          <span
+            key={model.alias}
+            title={`${model.label} · ${model.providers.map((p) => (p === "ionet" ? "io.net" : "AkashML")).join(" + ")}`}
+            className="rounded border border-border bg-background px-2 py-0.5 text-mono-sm text-on-surface-muted"
+          >
+            {model.alias}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 

@@ -154,3 +154,42 @@ export interface DepositHistoryResponse {
   confirmations_required: number;
   data: DepositReceipt[];
 }
+
+export type PaymentEventStatus =
+  | "quoted"
+  | "verified"
+  | "settled"
+  | "completed"
+  | "failed"
+  | "refunded";
+
+export interface PaymentRecord {
+  object: "payment";
+  id: string;
+  usage_event_id: string | null;
+  api_key_id: string | null;
+  payer_wallet: string;
+  quoted_amount: number;
+  settled_amount: number | null;
+  refunded_amount: number;
+  chain_id: number;
+  tx_hash: string | null;
+  model: string;
+  route: string;
+  estimated_tokens: number | null;
+  status: PaymentEventStatus;
+  failure_reason: string | null;
+  created_at: string;
+  verified_at: string | null;
+  settled_at: string | null;
+  completed_at: string | null;
+}
+
+export interface PaymentsResponse {
+  object: string;
+  x402_enabled: boolean;
+  days: number | null;
+  data: PaymentRecord[];
+  has_more: boolean;
+  next_cursor: string | null;
+}

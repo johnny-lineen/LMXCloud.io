@@ -22,6 +22,7 @@ import { registerModelsRoutes } from "./routes/models.js";
 import { registerStatusRoutes } from "./routes/status.js";
 import { registerUsageRoutes } from "./routes/usage.js";
 import { registerBalanceRoutes } from "./routes/balance.js";
+import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerPricingRoutes } from "./routes/pricing.js";
 import { createPaymentStore } from "./payments/store.js";
 import { registerX402ChatPayments } from "./payments/x402-server.js";
@@ -328,6 +329,13 @@ export async function buildServer() {
           maxDepositUsdc: config.deposits.maxDepositUsdc,
         }
       : undefined,
+  });
+  await registerPaymentRoutes(app, {
+    paymentStore,
+    apiKeyStore,
+    authenticate,
+    x402Enabled:
+      config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
   });
 
 

@@ -40,6 +40,18 @@ export interface CreateQuotedPaymentInput {
   apiKeyId?: string;
 }
 
+export interface PaymentsListQuery {
+  limit: number;
+  cursor?: string;
+  days?: number;
+}
+
+export interface PaymentsListResult {
+  data: PaymentEvent[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 /** Sprint 2 implements this against the CDP facilitator. */
 export interface PaymentVerifier {
   verify(

@@ -14,6 +14,7 @@ import {
   validateApiKey,
   type LmxChatResponse,
 } from "./lmx-client.js";
+import { enforceOriginLock } from "./origin-lock.js";
 import { runWithRequestContext } from "./request-context.js";
 
 const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "llama-3-70b";
@@ -490,6 +491,8 @@ async function startHttpServer() {
   await server.connect(transport);
 
   const httpServer = createServer(async (req, res) => {
+    if (!enforceOriginLock(req, res)) return;
+
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
     if (url.pathname === "/healthz") {

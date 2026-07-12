@@ -30,6 +30,7 @@ import type { Network } from "@x402/core/types";
 import { createRateLimiter } from "./rate-limit.js";
 import { createUsageStore } from "./usage/index.js";
 import { createCreditStore } from "./credits/index.js";
+import { createOriginLockHook } from "./origin-lock.js";
 
 
 
@@ -62,7 +63,11 @@ export async function buildServer() {
     app.log.warn("CLERK_SECRET_KEY is not set — POST /v1/auth/clerk will return 503");
   }
 
-
+  const originLock = createOriginLockHook();
+  if (originLock) {
+    app.addHook("onRequest", originLock);
+    app.log.info("Cloudflare origin lock enabled (LMX_ORIGIN_SECRET)");
+  }
 
   await app.register(cors, {
 

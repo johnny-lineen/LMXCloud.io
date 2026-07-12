@@ -45,6 +45,7 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `CLERK_SECRET_KEY` | Yes | Clerk → API keys → Secret key |
    | `SESSION_SECRET` | Yes | Random 32+ char string (e.g. `openssl rand -hex 32`) |
    | `SENTRY_DSN` | No | Sentry project DSN for API error reporting |
+   | `LMX_ORIGIN_SECRET` | No* | Shared secret for Cloudflare origin lock. When set, API rejects requests missing matching `X-Origin-Secret` header (403). Leave unset for local/dev. *Required once Cloudflare Transform Rule is live. `/health` is exempt for Railway probes. |
    | `HOST` | No | `0.0.0.0` (default) |
    | `INITIAL_CREDIT_BALANCE` | No | `1` |
    | `CREDITS_ALLOW_SELF_TOPUP` | No | `false` in production |
@@ -97,11 +98,23 @@ Deploy MCP as a separate service so agent traffic does not couple to API contain
    | `LMX_API_BASE_URL` | Yes | Public API base URL (e.g. `https://lmxcloudapi-production.up.railway.app`) |
    | `LMX_ADMIN_API_KEY` | No | Optional smoke-test fallback only — users should pass their own key |
    | `LMX_DEFAULT_MODEL` | No | `llama-3-70b` |
+   | `LMX_ORIGIN_SECRET` | No* | Same secret as the API. When set, MCP HTTP rejects requests missing matching `X-Origin-Secret` header (403). Leave unset for local/dev. *Required once Cloudflare Transform Rule is live. `/healthz` is exempt for Railway probes. |
 
 4. Generate a Railway domain (example: `https://lmxcloud-mcp-production.up.railway.app`).
 5. Optional custom domain: `mcp.lmxcloud.io`.
 
 **Exposed tools:** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`. Users authenticate with `Authorization: Bearer lmx_...` in their MCP client config — do not rely on a shared server API key for production traffic.
+
+### Cloudflare origin lock
+
+Once `api.lmxcloud.io` / `mcp.lmxcloud.io` are proxied through Cloudflare, lock the Railway origins so `*.up.railway.app` cannot bypass the edge:
+
+1. Generate a long random secret (e.g. `openssl rand -hex 32`).
+2. Set the same value as `LMX_ORIGIN_SECRET` on both Railway services (API + MCP).
+3. In Cloudflare → Rules → Transform Rules → Modify Request Header, add a rule that sets `X-Origin-Secret` to that value on every request forwarded to the origin (match `api.lmxcloud.io` and `mcp.lmxcloud.io`).
+4. Redeploy or restart both services after setting the env var.
+
+Until `LMX_ORIGIN_SECRET` is set, the check is a no-op (local dev and pre-Cloudflare deploys keep working).
 
 ### Verify MCP service
 

@@ -48,10 +48,11 @@ Everything below is verified directly against the code and local test runs, not 
 - **Payment failure reconciliation** — partial: x402 middleware cancels verified payment on handler 4xx/5xx; no explicit refund tx or user-visible credit-back when provider fails after balance deduct.
 
 **Ops / scale (fine for single-instance beta, harden before scaling):**
-- Rate limiter and SIWE nonce store are in-memory — reset on deploy, ineffective across multiple Railway instances.
+- Rate limiter and SIWE nonce store are in-memory — reset on deploy, ineffective across multiple Railway instances. **Partial mitigation available:** Cloudflare edge rate limiting (see new section below) adds a layer that survives redeploys/multi-instance regardless of app-level state; app-level Redis-backed limiter is still the real fix, not replaced.
 - Uptime monitor (UptimeRobot/Better Stack) — can't verify from code; confirm externally.
 - Streaming edge case: if stream completes but final `deduct` fails, client already received tokens with no recovery.
 - x402 streaming not supported yet (`x402_stream_unsupported` on paid path).
+- **New (2026-07-11): edge hardening not yet in place.** `api.lmxcloud.io` and `mcp.lmxcloud.io` are about to take traffic from strangers' autonomous agents (Bazaar/Agentic.Market listing, Distribution Sprint 4) with no origin-level DDoS/WAF protection today — see "Cloudflare edge hardening" section below.
 
 **Polish (non-blocking):**
 - Anchor contract on Base mainnet (Sepolia verified; Railway needs `ANCHOR_*` + deploy).
@@ -82,11 +83,12 @@ Positioning: **"AWS for Web3"** — Web3-native infrastructure for autonomous AI
 ### How to make the system better (engineering priorities)
 
 1. **Green mainnet canary** — upgrade mainnet RPC, rerun `test:x402:mainnet-canary`, confirm `payment_events` on chain 8453. This is the immediate gate.
-2. **Finish Sprint 3 hardening** — load-test anonymous x402 path; decide payer visibility model.
-3. **Legal before listing** — attorney review of Week 3 drafts unblocks Bazaar/MCP without unmanaged liability.
-4. **Reliability ops** — uptime monitor confirmed; keep dedicated RPC on both Sepolia (dev) and mainnet (prod).
-5. **Scale when needed** — Redis-backed rate limits + nonce store before second Railway instance.
-6. **Trust signals** — mainnet anchor deploy, LogsPage proof links, public status page already strong from Web3-2.
+2. **Cloudflare edge hardening** (new, 2026-07-11) — DNS migration + proxy `api.lmxcloud.io`/`mcp.lmxcloud.io`, WAF, edge rate limiting, origin-lock code change. See dedicated section above. Gates Sprint 4 listing alongside legal.
+3. **Finish Sprint 3 hardening** — load-test anonymous x402 path; decide payer visibility model.
+4. **Legal before listing** — attorney review of Week 3 drafts unblocks Bazaar/MCP without unmanaged liability.
+5. **Reliability ops** — uptime monitor confirmed; keep dedicated RPC on both Sepolia (dev) and mainnet (prod).
+6. **Scale when needed** — Redis-backed rate limits + nonce store before second Railway instance.
+7. **Trust signals** — mainnet anchor deploy, LogsPage proof links, public status page already strong from Web3-2.
 
 ### Explicitly not being built right now
 
@@ -287,6 +289,22 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 - [x] ~~(Track C) Web3-2: `GET /v1/usage/logs/:id/proof` endpoint live, contract address + recent roots surfaced on `StatusPage.tsx`~~ — done.
 - [ ] (Track C, optional) Deploy anchor contract on Base mainnet + set `ANCHOR_*` on Railway; optional LogsPage proof link.
 
+### Cloudflare edge hardening (decided 2026-07-11, gates Sprint 4 listing)
+
+**Why now:** Sprint 4 puts `api.lmxcloud.io` and `mcp.lmxcloud.io` in front of strangers' autonomous agents with zero prior relationship — public discovery catalog traffic, no signup gate. Today both are bare Railway domains with no edge protection: no DDoS absorption, no WAF, no rate limiting that survives a redeploy. Cloudflare closes this before listing, not after.
+
+**Scope, decided:** Cloudflare sits in front of the API + MCP server only (`api.lmxcloud.io`, `mcp.lmxcloud.io` on Railway). The dashboard (`apps/web` on Vercel) already has Vercel's own edge network and is lower-risk (human/browser traffic, Clerk-gated) — not in scope for this pass.
+
+**Plan:**
+1. ~~**DNS migration.**~~ **Done 2026-07-12.** `lmxcloud.io` purchased directly through Cloudflare Registrar — zone is active on Cloudflare from day one, no nameserver migration needed.
+2. **Proxy the Railway custom domains through Cloudflare.** `api.lmxcloud.io` and `mcp.lmxcloud.io` become Cloudflare-proxied (orange-cloud) CNAMEs pointing at the existing Railway-generated domains (DEPLOY.md already documents these as "optional custom domain" — this makes them non-optional). SSL/TLS mode: Full (Strict), since Railway terminates TLS on its own domain already.
+3. **WAF.** Enable Cloudflare Managed Rules (OWASP core ruleset) on both subdomains.
+4. **Edge rate limiting.** Add Cloudflare rate-limiting rules as a second layer on top of the existing app-level limits (`KEY_GEN_RATE_LIMIT_MAX`, `CHAT_RATE_LIMIT_MAX`) — edge rules survive Railway redeploys and multi-instance scaling, which the in-memory app limiter doesn't. Particularly worth tightening on `POST /v1/auth/key` (the one unauthenticated route).
+5. **Bot management — use carefully.** Cloudflare's Bot Fight Mode / Super Bot Fight Mode is designed to block the exact traffic pattern LMX Cloud is about to court on purpose (autonomous agents, no browser, no human). Do not enable aggressive bot-blocking on `api.lmxcloud.io`/`mcp.lmxcloud.io` without allowlisting for legitimate non-browser clients — this is a real footgun for Sprint 4's actual goal. DDoS protection and WAF are unconditionally safe to enable; bot scoring is not.
+6. **Origin lock (code dependency — see Cursor prompt).** Once Cloudflare is in front, the raw Railway domains (`*.up.railway.app`) still resolve directly and bypass all of the above. Needs an origin-side check so the API/MCP server reject traffic that didn't come through Cloudflare.
+
+**Status: in progress (2026-07-12).** Step 1 (domain + zone) done. DNS records added in Cloudflare: apex + `www` → Vercel (DNS only), `api`/`mcp` → Railway (proxied). `api.lmxcloud.io` and `www.lmxcloud.io`/`lmxcloud.io` **verified live end-to-end** (Vercel shows Valid Configuration on both, dashboard serves correctly, `GET https://api.lmxcloud.io/health` returns 200). `VITE_API_URL`, `SIWE_DOMAIN`, `SIWE_URI` updated to match the new domain (Vercel redeploy + Clerk allowed-origins update still need confirming next session). Edge rate limiting **done**: `auth-key-limit` rule deployed (10 req/hour per IP on `/v1/auth/key`, block 1hr). **WAF managed rules deferred** — OWASP Managed Ruleset requires Cloudflare Pro ($20/mo), John chose to skip for now; relying on automatic DDoS protection + the rate-limit rule instead. Revisit before Sprint 4 listing if budget allows. **Blocker unchanged:** Railway trial plan caps custom domains at 1 — `mcp.lmxcloud.io` still can't be added until Railway is upgraded (Hobby, ~$5/mo), deferred. Bot Fight Mode check not yet confirmed. Step 6 (origin lock) needs a Cursor prompt — see engineering priorities, not yet run.
+
 ### Distribution Sprint 4 — Goal 1: x402 Bazaar + Agentic.Market listing
 
 - [ ] Listing metadata, pricing, and schema prepared — same source of truth as the docs page, not maintained twice.
@@ -310,37 +328,56 @@ The Phase 1 section above is the *what and why*. This is the *when* — six spri
 - [ ] PR submitted to `elizaos-plugins/registry`.
 - [ ] Tested end-to-end with a real ElizaOS agent instance.
 
-## Phase 2 — AWS-for-Web3 expansion (decided 2026-07-08)
+## Phase 2 — settlement + proof layer for the agent economy (revised 2026-07-11)
 
-**Framing (plain version — this is the one that stuck):** Phase 2 is the same three pieces Phase 1 builds — routing, payment, proof — pointed at things other than LLM prompts. Nothing architecturally new, just wider use of what Phase 1 proves out. Phase 1 proves the pipes work at all: one resource type (compute), one provider type (io.net/Akash), one payment rail (x402). Phase 2 runs more things through those same pipes once they're proven, in the order that follows most naturally from what already exists:
+**What LMX Cloud is, directionally — the operating thesis this section builds from:** LMX Cloud is the settlement and proof layer for the agent economy — infrastructure that lets an autonomous agent with no human, no legal entity, and no corporate card discover a resource, pay for it per-call in stablecoin, and cryptographically prove it was delivered. Two layers, different competitive position each:
 
-1. **Storage.** Agents don't just need to run prompts, they need somewhere to keep data — memory, logs, files. Same idea as routing to io.net/Akash for compute, but routing to a storage network (Filecoin/Arweave) instead, paid and verified the same way.
-2. **Other sellers renting the rails.** Right now LMX is the thing an agent pays. Later, a smaller compute or storage provider who wants to accept agent payments but doesn't want to build wallet auth and payment verification themselves plugs into LMX's version instead of building their own. LMX becomes the plumbing underneath other people's businesses too, not just its own.
-3. **More job types.** Right now the only thing an agent can pay LMX for is "run this chat completion." Later that widens to embeddings, image generation, fine-tuning jobs — same pipes, more things flowing through them.
+- **Execution layer** (the "AWS" surface) — resource-agnostic routing via the `ProviderAdapter` pattern (`apps/api/src/providers/`): compute (io.net/Akash, done), storage (Filecoin/Arweave, Goal 1 below), and eventually third-party/agent-authored functions (Goal 2 below).
+- **Trust layer** (what's actually defensible) — settlement (x402 per-call payment) + proof (Merkle-anchored delivery receipts, Web3-2). Payment alone is not a moat — Coinbase's CDP Facilitator already owns that and LMX builds on top of it (`docs/x402-verification.md`). Discovery alone is not a moat — Coinbase's real CDP Bazaar already has the liquidity (165M+ cumulative x402 transactions, 480K+ agents, ~$50M+ volume as of April 2026, per Chainalysis / x402 Inc. reporting). **Proof of delivery is the wedge** — cryptographic evidence a specific call was fulfilled as specified, independently checkable. Nobody else surveyed in this space has built that layer.
 
-*(AWS analogy, for reference: this maps onto AWS's own build order — compute, then storage, then higher-level compute, then letting others sell on top of your infra. LMX already has 3 of the 4 foundational pieces AWS needed before it became a platform: compute (io.net/Akash routing), identity (SIWE wallet auth), and audit/logging (Merkle-anchored receipts) — the missing piece was billing, which is Phase 1's x402 work above.)*
+**Correction for the record (2026-07-11):** `x402bazaar.org` is *not* Coinbase's product — it's an independent, single-operator clone (GitHub user "Wintyx57") built on the open x402 protocol, near-zero traction observed (0 txns on its SKALE listing). Don't confuse it with the real CDP Bazaar discovery layer LMX lists on in Sprint 4. Its existence is still a useful data point: a bare directory + payment wrapper is trivially cloneable by one person in a weekend, which confirms neither layer alone is a moat and reinforces that verified delivery is the differentiated one.
 
-**Sequencing note:** Phase 2 doesn't start until Phase 1's payment flow is actually live (Sprint 2 close-out + Sprint 3 mainnet flip). Building storage routing on top of a payment system that doesn't fully work yet just means debugging the same problem twice.
+**Explicit non-goals, restated so this doesn't drift again:** LMX does not compete with Bazaar as a directory. LMX does not compete with CDP Facilitator on payment verification. LMX does not claim to verify the *correctness* or quality of a third party's function output — only that the call happened and the response matched what was declared, hashed and timestamped, anchored on-chain. That precision matters for Week 3 legal: "verified delivery" is a defensible claim; "verified correct" is liability exposure for someone else's function that LMX shouldn't take on.
+
+**Sequencing note, reaffirmed:** Phase 2 doesn't start until Phase 1's payment flow is fully live (Sprint 3 mainnet flip + Sprint 4 Bazaar listing). AWS's own history backs extra caution specifically on datasets — AWS Marketplace shipped in 2012, Lambda in 2014, but AWS Data Exchange (a dataset marketplace) didn't ship until 2019, thirteen years after launch, once the trust/billing/identity layer was completely proven out. Datasets stay explicitly out of scope for the same reason: no verification/anti-redistribution model exists yet for "prove a dataset was delivered without also enabling it to be copied and resold."
 
 ### Phase 2 Goal 1 — Storage routing (the "S3" of LMX)
 
-Route agent requests for storage/memory (files, logs, embeddings) to decentralized storage networks (e.g. Filecoin, Arweave) the same way inference requests already route to io.net/Akash — same `ProviderAdapter` pattern (`apps/api/src/providers/`), same per-call x402 pricing/verification, same receipt/Merkle anchoring for proof of delivery.
+Route agent requests for storage/memory (files, logs, embeddings) to decentralized storage networks (e.g. Filecoin, Arweave) the same way inference requests already route to io.net/Akash — same `ProviderAdapter` pattern, same per-call x402 pricing/verification, same receipt/Merkle anchoring for proof of delivery.
 
 **Definition of done:** an agent can pay per-call (or per-byte/per-period) to store and retrieve data through LMX Cloud, routed to at least one decentralized storage network, with a verifiable receipt the same way inference calls get one today.
 
-### Phase 2 Goal 2 — Open the rails to other sellers (the "Marketplace" of LMX)
+### Phase 2 Goal 2 — Callable function registry (Marketplace + Lambda, merged 2026-07-11)
 
-Package LMX's payment + verification stack (x402 middleware, pricing catalog, receipt/Merkle anchoring) as something a smaller compute or storage provider — not Akash/io.net scale — can plug into instead of building their own agent-payment stack from scratch. Turns LMX from "a router agents shop through" into infrastructure other sellers rent, the same relationship AWS has to companies selling on AWS Marketplace.
+**Revised framing:** originally scoped as two separate goals — "open the rails to other sellers" (Marketplace) and "widen job types routed" (the "Lambda" of LMX, see retired Goal 3 below). Collapsing these: a listed marketplace seller and a callable function are the same object once distribution runs through the MCP server. The MCP server (Phase 1 Goal 2, v1 shipped 2026-07-09) stops being "LMX's own 7 tools" and becomes a registry — any wallet-verified provider, including an agent itself, registers a function (manifest: description, input/output schema, price, endpoint), and any MCP-compatible agent discovers and calls it the same way it calls LMX's built-in tools today.
 
-**Definition of done:** at least one external, non-LMX-operated provider is reachable through LMX's payment and verification rails, earning LMX a cut of that provider's agent-originated revenue.
+**Agents as first-class citizens, applied concretely:** the registrant doesn't have to be a company. This reuses the Web3-1 self-mint pattern (wallet-signed, no human review) — an agent good at some task can list its own skill and sell it to other agents. That's the differentiated end-state; every comparable product surveyed (CDP Bazaar, x402bazaar.org, RelAI) assumes sellers are companies and agents are only buyers.
 
-### Phase 2 Goal 3 — Widen job types routed (the "Lambda" of LMX)
+**Anti-abuse, mechanical gates only, no human curation:** (1) a synthetic test call LMX makes once at registration to confirm the function responds and matches its declared schema before going live; (2) a small refundable USDC bond, slashed on verified bad behavior (schema mismatch, receipt anomalies, buyer disputes). Consistent with wallet-native self-serve onboarding — avoids reintroducing a human review bottleneck.
 
-Extend routing beyond chat completions to other paid job types (embeddings, fine-tuning, image generation) through the same provider-adapter/pricing/verification pipeline, once Goal 1 proves the pattern generalizes past one resource type.
+**Open technical question, unresolved:** for a function backed by a third party's own webhook (not LMX-routed compute), what can the receipt actually attest? LMX only sees what the provider chooses to return — the receipt can say "a call was made, this was the response, hashed and timestamped," nothing about the provider's backend. Whether that thin a guarantee is still a sellable trust signal is untested.
 
-**Definition of done:** at least one non-chat-completion job type is routable, priced, and payable per-call through the existing x402 flow.
+**Revenue model, open:** the old "LMX earns a cut of agent-originated revenue" assumed a marketplace take-rate on GMV. If LMX isn't routing the underlying resource — just settling and receipting a third party's call — a flat or usage-based infra fee (pricing the receipt/anchoring service itself) may be the more honest model. Decide before sizing Goal 2 revenue projections.
 
-**Explicitly not Phase 2:** reputation/trust-scoring products (e.g. feeding receipts into ERC-8004 or similar emerging standards) — revisit once Phase 2 has real multi-resource transaction volume to make that data meaningful. Treasury/spend-policy management for agents — adjacent territory already being built by others (PolicyLayer, Eco, AWS Bedrock AgentCore); not a near-term fit unless narrowly scoped to cross-provider compute/storage spend specifically.
+**Scope correction:** this is a bigger product commitment than Distribution Sprint 5's current sizing ("ship 7 tools, wire x402, get in registry"). "MCP is the flagship product" implies an ongoing surface — seller/listing dashboard, an in-MCP discovery tool (agents need to search LMX's own registry, not just Bazaar's), health monitoring on every listed function, a delisting/dispute flow. Not a sprint; a product line. Needs an explicit resourcing decision, not folded silently into Sprint 5/6 as currently scoped.
+
+**Definition of done (revised):** a wallet-verified provider — human-operated or agent-operated — can register a function with a price and schema through LMX's MCP registry; any MCP-compatible agent can discover and call it through LMX's existing MCP surface; LMX settles payment (x402) and issues a delivery receipt, without vetting the function's output quality.
+
+### Phase 2 Goal 3 — retired, folded into Goal 2 (2026-07-11)
+
+Previously "widen job types routed (the Lambda of LMX)." Superseded — see the Goal 2 merge above. A new job type (embeddings, fine-tuning, image generation) is now just another function in the registry, whether LMX-operated or third-party.
+
+### Phase 2 sprint plan (directional, added 2026-07-11 — not yet scoped for real execution; Phase 1 must close first)
+
+- **Platform Sprint 1 — Storage routing (Goal 1).** Filecoin/Arweave adapter, same x402 + receipt pattern as compute.
+- **Platform Sprint 2 — MCP registry foundations.** Manifest schema (description, input/output schema, price, endpoint), wallet-signed self-registration reusing the Web3-1 mint pattern, synthetic test-call gate.
+- **Platform Sprint 3 — Trust mechanics.** Refundable USDC bond + slashing logic, resolve the third-party/webhook receipt guarantee question above, delisting/dispute flow.
+- **Platform Sprint 4 — Seller product surface.** Listing/seller dashboard, in-MCP discovery tool, health monitoring on listed functions.
+- **Platform Sprint 5 — Agent-as-seller pilot.** Get one real agent-authored function listed and transacted end-to-end as proof of the "agents as first-class citizens" thesis, before opening broadly.
+
+Open questions carried forward into scoping: revenue model (take-rate vs. infra fee), whether the unresolved receipt-guarantee question blocks webhook-backed listings entirely, whether the mechanical-only review gate holds up at real abuse volume.
+
+**Explicitly not Phase 2:** dataset marketplace — deferred per the AWS Data Exchange sequencing note above, no verification/anti-redistribution model exists yet. Reputation/trust-scoring products (e.g. feeding receipts into ERC-8004 or similar emerging standards) — revisit once Phase 2 has real multi-resource transaction volume to make that data meaningful. Treasury/spend-policy management for agents — adjacent territory already being built by others (PolicyLayer, Eco, AWS Bedrock AgentCore); not a near-term fit unless narrowly scoped to cross-provider compute/storage spend specifically.
 
 ## Deliberately deferred (not blocking beta)
 

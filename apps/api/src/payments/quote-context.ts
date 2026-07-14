@@ -111,6 +111,4 @@ export function buildChatQuoteFromHttpContext(
   return buildChatQuote(body, providers, healthStore, options);
 }
 
-export function formatUsdPrice(amount: number): string {
-  return `$${amount.toFixed(6)}`;
-}
+export { formatUsdPrice } from "@lmxcloud/x402";

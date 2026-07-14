@@ -6,11 +6,13 @@ WORKDIR /app
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/x402/package.json packages/x402/
 COPY apps/api/package.json apps/api/
 RUN pnpm install --frozen-lockfile
 
 FROM deps AS build
 COPY packages/shared packages/shared
+COPY packages/x402 packages/x402
 COPY apps/api apps/api
 # tsconfig.tsbuildinfo must not drive incremental skips when dist/ is absent (see .dockerignore)
 RUN pnpm --filter @lmxcloud/api exec tsc -b --force
@@ -21,9 +23,12 @@ WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/x402/node_modules ./packages/x402/node_modules
 COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/
+COPY --from=build /app/packages/x402/dist ./packages/x402/dist
+COPY --from=build /app/packages/x402/package.json ./packages/x402/
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/package.json ./apps/api/
 COPY package.json pnpm-workspace.yaml ./

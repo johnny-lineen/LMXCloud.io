@@ -16,11 +16,14 @@ import {
 } from "./lmx-client.js";
 import { enforceOriginLock } from "./origin-lock.js";
 import { runWithRequestContext } from "./request-context.js";
+import { loadMcpX402Config, runX402ChatCompletion, type McpX402Config } from "./x402.js";
 
 const DEFAULT_MODEL = process.env.LMX_DEFAULT_MODEL ?? "llama-3-70b";
 const MCP_TRANSPORT = (process.env.LMX_MCP_TRANSPORT ?? "stdio") as "stdio" | "http";
 const MCP_HOST = process.env.LMX_MCP_HOST ?? "0.0.0.0";
 const MCP_PORT = Number(process.env.PORT ?? process.env.LMX_MCP_PORT ?? 3334);
+
+let mcpX402: McpX402Config | null = null;
 
 const optionalApiKeySchema = z
   .string()
@@ -52,7 +55,7 @@ function requestContextFromHttp(req: IncomingMessage) {
 function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
   const server = new McpServer({
     name: "lmxcloud-mcp",
-    version: "0.3.0",
+    version: "0.4.0",
   });
 
   server.tool(
@@ -330,7 +333,7 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
 
   server.tool(
     "chat_completion",
-    "Call LMX Cloud OpenAI-compatible chat completions endpoint. Requires a user API key.",
+    "Call LMX Cloud OpenAI-compatible chat completions. Prefers a pre-funded API key (Bearer / api_key); when omitted and x402 is enabled, requires a USDC pay-per-call payment.",
     {
       prompt: z.string().min(1).describe("User prompt to send to the selected model."),
       model: z
@@ -352,16 +355,49 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
         .describe("Optional sampling temperature."),
       api_key: optionalApiKeySchema,
     },
-    async ({ prompt, model, max_tokens, temperature, api_key }) => {
+    async ({ prompt, model, max_tokens, temperature, api_key }, extra) => {
       const started = Date.now();
       const access = guardToolAccess({
         tool: "chat_completion",
         transport: transportMode,
         toolApiKey: api_key,
-        requireApiKey: true,
+        // Dual path: Bearer/balance when a key is present; otherwise x402 fallback.
+        requireApiKey: false,
+        // Never treat server admin/fulfillment keys as the caller's balance key.
+        allowAdminFallback: false,
       });
       if (!access.ok) {
         return { isError: true, content: [{ type: "text", text: access.message }] };
+      }
+
+      const hasBalanceKey = Boolean(access.auth.apiKey);
+      if (!hasBalanceKey) {
+        if (!mcpX402) {
+          return {
+            isError: true,
+            content: [
+              {
+                type: "text",
+                text: [
+                  "LMX API key is required for this tool (x402 pay-per-call is not enabled on this MCP server).",
+                  "Provide one of:",
+                  "- api_key tool argument",
+                  "- Authorization: Bearer lmx_... header (hosted MCP)",
+                  "- LMX_API_KEY in your MCP client env (local stdio)",
+                  "Create a key at https://lmxcloud.io/console/keys",
+                ].join("\n"),
+              },
+            ],
+          };
+        }
+
+        return runX402ChatCompletion({
+          args: { prompt, model, max_tokens, temperature, api_key },
+          extra,
+          defaultModel: DEFAULT_MODEL,
+          x402: mcpX402,
+          started,
+        });
       }
 
       const authError = await validateApiKey(access.auth.apiKey);
@@ -477,13 +513,30 @@ function createLmxMcpServer(transportMode: "stdio" | "http"): McpServer {
   return server;
 }
 
+async function initX402() {
+  const loaded = await loadMcpX402Config();
+  if (loaded.ok) {
+    mcpX402 = loaded.config;
+    process.stderr.write(
+      `[lmxcloud-mcp] x402 pay-per-call enabled (network=${loaded.config.networkId})\n`,
+    );
+  } else {
+    mcpX402 = null;
+    process.stderr.write(
+      `[lmxcloud-mcp] x402 pay-per-call disabled (${loaded.reason})\n`,
+    );
+  }
+}
+
 async function startStdioServer() {
+  await initX402();
   const server = createLmxMcpServer("stdio");
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 
 async function startHttpServer() {
+  await initX402();
   const server = createLmxMcpServer("http");
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
@@ -502,7 +555,10 @@ async function startHttpServer() {
           ok: true,
           transport: "http",
           endpoint: "/mcp",
-          auth: "Bearer lmx_... required for chat_completion",
+          auth: mcpX402
+            ? "Bearer lmx_... (balance) or x402 pay-per-call when omitted"
+            : "Bearer lmx_... required for chat_completion",
+          x402: Boolean(mcpX402),
         }),
       );
       return;

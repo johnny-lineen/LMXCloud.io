@@ -103,6 +103,8 @@ export type ToolGuardContext = {
   transport: "stdio" | "http";
   toolApiKey?: string;
   requireApiKey: boolean;
+  /** When false, do not treat LMX_ADMIN_API_KEY / server LMX_API_KEY as the caller key. */
+  allowAdminFallback?: boolean;
 };
 
 export function guardToolAccess(
@@ -113,7 +115,7 @@ export function guardToolAccess(
   const resolved = resolveApiKey({
     toolApiKey: context.toolApiKey,
     transport: context.transport,
-    allowAdminFallback: true,
+    allowAdminFallback: context.allowAdminFallback ?? true,
   });
 
   if (!resolved.ok) {

@@ -26,6 +26,9 @@ importers:
       '@lmxcloud/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@lmxcloud/x402':
+        specifier: workspace:*
+        version: link:../../packages/x402
       '@openzeppelin/merkle-tree':
         specifier: ^1.0.8
         version: 1.0.8
@@ -58,7 +61,7 @@ importers:
         version: 3.0.0(ethers@6.17.0)
       viem:
         specifier: ^2.54.6
-        version: 2.54.6(typescript@5.9.3)(zod@3.25.76)
+        version: 2.54.6(typescript@5.9.3)(zod@4.4.3)
     devDependencies:
       '@types/node':
         specifier: ^22.15.21
@@ -146,9 +149,21 @@ importers:
 
   apps/mcp-server:
     dependencies:
+      '@lmxcloud/x402':
+        specifier: workspace:*
+        version: link:../../packages/x402
       '@modelcontextprotocol/sdk':
         specifier: ^1.17.1
         version: 1.29.0(zod@3.25.76)
+      '@x402/core':
+        specifier: 2.17.0
+        version: 2.17.0
+      '@x402/extensions':
+        specifier: 2.17.0
+        version: 2.17.0(ethers@6.17.0)(typescript@5.9.3)
+      '@x402/mcp':
+        specifier: 2.17.0
+        version: 2.17.0
       dotenv:
         specifier: ^16.5.0
         version: 16.6.1
@@ -229,6 +244,28 @@ importers:
 
   packages/shared:
     devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
+  packages/x402:
+    dependencies:
+      '@coinbase/x402':
+        specifier: ^2.1.0
+        version: 2.1.0(typescript@5.9.3)
+      '@x402/core':
+        specifier: 2.17.0
+        version: 2.17.0
+      '@x402/evm':
+        specifier: 2.17.0
+        version: 2.17.0(typescript@5.9.3)
+      '@x402/extensions':
+        specifier: 2.17.0
+        version: 2.17.0(ethers@6.17.0)(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.21
+        version: 22.20.0
       typescript:
         specifier: ^5.8.3
         version: 5.9.3
@@ -1589,6 +1626,9 @@ packages:
     peerDependenciesMeta:
       '@x402/paywall':
         optional: true
+
+  '@x402/mcp@2.17.0':
+    resolution: {integrity: sha512-1Gwy9UJipnjD/ZuQBSu/k9URgnotXG+c9rxpNrXctwau3DuBWxQVlc6fkRNCP6RPay/ZkIT5rijTvQbSxhTUDQ==}
 
   abitype@1.0.6:
     resolution: {integrity: sha512-MMSqYh4+C/aVqI2RQaWqbvI4Kxo5cQV40WQ4QFtDnNzCkqChm8MuENhElmynZlO0qUy/ObkEUaXtKqYnx1Kp3A==}
@@ -4403,6 +4443,15 @@ snapshots:
       - typescript
       - utf-8-validate
 
+  '@x402/mcp@2.17.0':
+    dependencies:
+      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@x402/core': 2.17.0
+      zod: 3.25.76
+    transitivePeerDependencies:
+      - '@cfworker/json-schema'
+      - supports-color
+
   abitype@1.0.6(typescript@5.9.3)(zod@3.25.76):
     optionalDependencies:
       typescript: 5.9.3
@@ -4412,6 +4461,11 @@ snapshots:
     optionalDependencies:
       typescript: 5.9.3
       zod: 3.25.76
+
+  abitype@1.2.3(typescript@5.9.3)(zod@4.4.3):
+    optionalDependencies:
+      typescript: 5.9.3
+      zod: 4.4.3
 
   abitype@1.2.3(typescript@6.0.3)(zod@4.4.3):
     optionalDependencies:
@@ -5226,6 +5280,21 @@ snapshots:
     transitivePeerDependencies:
       - zod
 
+  ox@0.14.30(typescript@5.9.3)(zod@4.4.3):
+    dependencies:
+      '@adraffy/ens-normalize': 1.11.1
+      '@noble/ciphers': 1.3.0
+      '@noble/curves': 1.9.1
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
+      abitype: 1.2.3(typescript@5.9.3)(zod@4.4.3)
+      eventemitter3: 5.0.1
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - zod
+
   ox@0.14.30(typescript@6.0.3)(zod@4.4.3):
     dependencies:
       '@adraffy/ens-normalize': 1.11.1
@@ -5662,6 +5731,23 @@ snapshots:
       abitype: 1.2.3(typescript@5.9.3)(zod@3.25.76)
       isows: 1.0.7(ws@8.21.0)
       ox: 0.14.30(typescript@5.9.3)(zod@3.25.76)
+      ws: 8.21.0
+    optionalDependencies:
+      typescript: 5.9.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+      - zod
+
+  viem@2.54.6(typescript@5.9.3)(zod@4.4.3):
+    dependencies:
+      '@noble/curves': 1.9.1
+      '@noble/hashes': 1.8.0
+      '@scure/bip32': 1.7.0
+      '@scure/bip39': 1.6.0
+      abitype: 1.2.3(typescript@5.9.3)(zod@4.4.3)
+      isows: 1.0.7(ws@8.21.0)
+      ox: 0.14.30(typescript@5.9.3)(zod@4.4.3)
       ws: 8.21.0
     optionalDependencies:
       typescript: 5.9.3

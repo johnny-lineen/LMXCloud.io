@@ -1,8 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { IncomingMessage } from "node:http";
 import { Readable } from "node:stream";
-import { createFacilitatorConfig } from "@coinbase/x402";
-import { HTTPFacilitatorClient, x402HTTPResourceServer, x402ResourceServer } from "@x402/core/server";
+import { x402HTTPResourceServer } from "@x402/core/server";
 import type {
   HTTPRequestContext,
   HTTPTransportContext,
@@ -10,18 +9,17 @@ import type {
   VerifyResultContext,
   VerifiedPaymentCanceledContext,
 } from "@x402/core/server";
-import {
-  bazaarResourceServerExtension,
-  declareDiscoveryExtension,
-} from "@x402/extensions/bazaar";
+import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { paymentMiddlewareFromHTTPServer } from "@x402/fastify";
-import { UptoEvmScheme } from "@x402/evm/upto/server";
 import type { Network } from "@x402/core/types";
+import {
+  createLmxX402ResourceServer,
+  formatUsdPrice,
+} from "@lmxcloud/x402";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { HealthStore } from "../health/store.js";
 import {
   buildChatQuoteFromHttpContext,
-  formatUsdPrice,
   parseChatBody,
 } from "./quote-context.js";
 import { hashPaymentPayload } from "./idempotency.js";
@@ -172,13 +170,11 @@ function registerEarlyJsonBodyParser(app: FastifyInstance): void {
 }
 
 export function registerX402ChatPayments(deps: X402ServerDeps): void {
-  const facilitatorClient = new HTTPFacilitatorClient(
-    createFacilitatorConfig(deps.cdpApiKeyId, deps.cdpApiKeySecret),
-  );
-
-  const resourceServer = new x402ResourceServer(facilitatorClient);
-  resourceServer.register(deps.networkId, new UptoEvmScheme());
-  resourceServer.registerExtension(bazaarResourceServerExtension);
+  const resourceServer = createLmxX402ResourceServer({
+    networkId: deps.networkId,
+    cdpApiKeyId: deps.cdpApiKeyId,
+    cdpApiKeySecret: deps.cdpApiKeySecret,
+  });
 
   if (deps.paymentStore) {
     resourceServer.onAfterVerify(async (context: VerifyResultContext) => {

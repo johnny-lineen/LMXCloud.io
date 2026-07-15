@@ -93,7 +93,7 @@ export function DocsPage() {
         />
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[220px_1fr]">
-          <nav className="hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto">
+          <nav className="hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto lg:[scrollbar-width:none] lg:[&::-webkit-scrollbar]:hidden">
             <p className="text-label-sm text-on-surface-faint">On this page</p>
             <ul className="mt-3 space-y-1">
               {SECTIONS.map((section) => (

@@ -1,0 +1,170 @@
+export type OpsChannel = "x402" | "balance" | "mcp";
+
+export type OpsProviderStatus = {
+  healthy: boolean;
+  latencyMs: number | null;
+  tier: number;
+  isDepin: boolean;
+  lastCheck: number | null;
+};
+
+export type OpsPayment = {
+  id: string;
+  payerWallet: string;
+  quotedAmount: number;
+  settledAmount: number | null;
+  status: string;
+  model: string;
+  route: string;
+  chainId: number;
+  txHash: string | null;
+  createdAt: string;
+  channel: "x402";
+};
+
+export type OpsUsageDay = {
+  date: string;
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number;
+  fallbackCount: number;
+  avgLatencyMs: number | null;
+};
+
+export type OpsUsageSummary = {
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cost: number;
+  fallbackCount: number;
+  avgLatencyMs: number | null;
+  uniquePayers: number;
+  uniqueApiKeys: number;
+};
+
+export type OpsMcpEvent = {
+  id: string;
+  ts: string;
+  tool: string;
+  callerId: string;
+  authSource: string;
+  ok: boolean;
+  level: string;
+  latencyMs?: number;
+  detail?: string;
+};
+
+export type OpsActivityItem =
+  | {
+      kind: "payment";
+      id: string;
+      at: string;
+      channel: "x402";
+      label: string;
+      status: string;
+      amount: number;
+      model: string;
+      wallet: string;
+      txHash: string | null;
+    }
+  | {
+      kind: "usage";
+      id: string;
+      at: string;
+      channel: "x402" | "balance";
+      label: string;
+      provider: string;
+      model: string;
+      tokens: number;
+      cost: number;
+      latencyMs: number;
+      fallbackUsed: boolean;
+    }
+  | {
+      kind: "mcp";
+      id: string;
+      at: string;
+      channel: "mcp";
+      label: string;
+      tool: string;
+      ok: boolean;
+      callerId: string;
+      authSource: string;
+      latencyMs?: number;
+      detail?: string;
+    };
+
+export type IrregularitySeverity = "info" | "warn" | "critical";
+
+export type OpsIrregularity = {
+  id: string;
+  severity: IrregularitySeverity;
+  category: "health" | "payments" | "usage" | "mcp" | "config";
+  title: string;
+  detail: string;
+  action: string;
+  metric?: string;
+  relatedIds?: string[];
+};
+
+export type StuckPayment = {
+  id: string;
+  status: string;
+  payerWallet: string;
+  model: string;
+  quotedAmount: number;
+  createdAt: string;
+  ageMinutes: number;
+};
+
+export type OpsOverview = {
+  object: "ops_overview";
+  generatedAt: string;
+  windowDays: number;
+  storage: "postgres" | "file";
+  server: {
+    x402Enabled: boolean;
+    paymentStore: "ready" | "disabled";
+    providersConfigured: string[];
+    fallbackChain: string[];
+  };
+  health: {
+    healthyCount: number;
+    providerCount: number;
+    providers: Record<string, OpsProviderStatus>;
+  };
+  payments: {
+    recent: OpsPayment[];
+    statusCounts: Record<string, number>;
+  };
+  usage: {
+    summary: OpsUsageSummary;
+    history: OpsUsageDay[];
+    recent: Array<{
+      id: string;
+      channel: OpsChannel;
+      provider: string;
+      model: string;
+      totalTokens: number;
+      cost: number;
+      latencyMs: number;
+      fallbackUsed: boolean;
+      createdAt: string;
+    }>;
+  };
+  mcp: {
+    buffered: number;
+    recent: OpsMcpEvent[];
+  };
+  paymentsStuck: StuckPayment[];
+  attention: {
+    critical: number;
+    warn: number;
+    info: number;
+  };
+  irregularities: OpsIrregularity[];
+  activity: OpsActivityItem[];
+};

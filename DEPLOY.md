@@ -8,12 +8,25 @@ Ship the **API on Railway** and the **dashboard + demo on Vercel**.
 | MCP Server | Railway | repo root + `apps/mcp-server/railway.toml` |
 | Dashboard | Vercel | `apps/web` |
 | Demo (optional) | Vercel | `apps/demo` |
+| Ops dashboard | Vercel | `apps/ops` |
 
 ---
 
+## Ops dashboard (`apps/ops`)
+
+Internal visibility for x402 / MCP / usage / provider health. Deploy like `apps/web` (Vercel root `apps/ops`).
+
+| Variable | Where | Notes |
+|----------|-------|-------|
+| `LMX_OPS_API_KEY` | Railway API (+ MCP) | Long random secret; required for `/v1/ops/*` |
+| `VITE_API_URL` | Vercel ops | e.g. `https://api.lmxcloud.io` |
+| Ops key in UI | Browser | Paste `LMX_OPS_API_KEY` in the ops UI (localStorage); do not bake into public Vercel builds |
+
+MCP forwards tool log events to `POST /v1/ops/mcp-events` when `LMX_OPS_API_KEY` and `LMX_API_BASE_URL` are set (plus `LMX_ORIGIN_SECRET` if origin lock is enabled).
+
 ## Prerequisites
 
-- Code pushed to GitHub ([johnny-lineen/LMXCloud.io](https://github.com/johnny-lineen/LMXCloud.io))
+- Code pushed to GitHub ([LMXCloud/LMXCloud.io](https://github.com/LMXCloud/LMXCloud.io))
 - [Neon](https://console.neon.tech) Postgres (`DATABASE_URL`) — survives Railway account changes
 - [Clerk](https://dashboard.clerk.com) app for dashboard sign-in
 - io.net API key (required)
@@ -44,6 +57,7 @@ If your current Railway account has no credits left, use a **fresh account** —
    | `DATABASE_URL` | Yes | Neon pooled connection string |
    | `CLERK_SECRET_KEY` | Yes | Clerk → API keys → Secret key |
    | `SESSION_SECRET` | Yes | Random 32+ char string (e.g. `openssl rand -hex 32`) |
+   | `LMX_OPS_API_KEY` | Yes (ops dashboard) | Shared secret for `/v1/ops/*` and MCP event ingest |
    | `SENTRY_DSN` | No | Sentry project DSN for API error reporting |
    | `LMX_ORIGIN_SECRET` | No* | Shared secret for Cloudflare origin lock. When set, API rejects requests missing matching `X-Origin-Secret` header (403). Leave unset for local/dev. *Required once Cloudflare Transform Rule is live. `/health` is exempt for Railway probes. |
    | `HOST` | No | `0.0.0.0` (default) |

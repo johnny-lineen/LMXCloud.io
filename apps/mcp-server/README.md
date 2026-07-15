@@ -38,6 +38,7 @@ Server:
 
 - `LMX_API_BASE_URL` (default: `http://127.0.0.1:3000`)
 - `LMX_ADMIN_API_KEY` (optional; smoke tests + x402 fulfillment fallback)
+- `LMX_OPS_API_KEY` (optional; forwards tool events to API `/v1/ops/mcp-events` for the ops dashboard)
 - `LMX_X402_FULFILLMENT_API_KEY` (preferred funded key for fulfilling x402 MCP calls)
 - `LMX_DEFAULT_MODEL` (default: `llama-3-70b`)
 - `LMX_MCP_TRANSPORT` (`stdio` or `http`, default: `stdio`)

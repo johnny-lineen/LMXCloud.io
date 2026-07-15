@@ -8,20 +8,24 @@
     "dev:mcp": "pnpm --filter @lmxcloud/mcp-server dev",
     "dev:mcp:http": "pnpm --filter @lmxcloud/mcp-server dev:http",
     "dev:web": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/web dev",
-    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/x402 build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build && pnpm --filter @lmxcloud/mcp-server build && pnpm --filter @lmxcloud/web build",
+    "build": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/x402 build && pnpm --filter @lmxcloud/api build && pnpm --filter @lmxcloud/demo build && pnpm --filter @lmxcloud/mcp-server build && pnpm --filter @lmxcloud/web build && pnpm --filter @lmxcloud/ops build",
     "build:demo": "pnpm --filter @lmxcloud/demo build",
     "build:web": "pnpm --filter @lmxcloud/web build",
     "typecheck": "pnpm --filter @lmxcloud/shared build && pnpm --filter @lmxcloud/x402 build && pnpm -r typecheck",
     "start": "pnpm --filter @lmxcloud/api start",
     "deploy:anchor": "pnpm --filter @lmxcloud/api deploy:anchor",
     "deploy:anchor:mainnet": "pnpm --filter @lmxcloud/api deploy:anchor:mainnet",
-    "verify:receipt": "pnpm --filter @lmxcloud/api verify:receipt"
+    "verify:receipt": "pnpm --filter @lmxcloud/api verify:receipt",
+    "dev:ops": "pnpm --filter @lmxcloud/ops dev",
+    "build:ops": "pnpm --filter @lmxcloud/ops build"
   },
   "engines": {
     "node": ">=20"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild"]
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
   },
   "devDependencies": {
     "typescript": "^5.8.3"

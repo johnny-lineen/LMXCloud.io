@@ -1,58 +1,35 @@
-# LMX Cloud — OpenAI-Compatible Inference Router
+# LMX Cloud — OpenAI-Compatible Inference for Agents
 
-OpenAI-compatible inference API that routes requests through decentralized compute (io.net, Akash) with automatic provider fallback. Evolving into Web3-native infrastructure: wallet-based identity (SIWE), on-chain USDC funding on Base, and verifiable routing logs for developers and autonomous agents.
+OpenAI-compatible inference API that routes requests through decentralized compute (io.net, Akash) with automatic provider fallback. Built for developers **and** autonomous agents: wallet identity (SIWE), USDC funding on Base, x402 pay-per-call settlement, MCP tools, and verifiable routing logs.
+
+**Live:** [lmxcloud.io](https://lmxcloud.io) · API `https://api.lmxcloud.io` · MCP `https://mcp.lmxcloud.io/mcp`
 
 ## Current capabilities
 
+### Inference & routing
 - Multi-provider routing with health-aware fallback and transparent `x-lmx-*` headers
 - Streaming chat completions (SSE) with billing metadata
+- 30 model aliases mapped to healthy DePIN providers (`GET /v1/models`)
+
+### Auth & funding
 - Email sign-in (Clerk) or wallet sign-in (SIWE) with session tokens and API keys
-- USDC deposits on Base credited to inference balance after on-chain confirmations
+- Internal credit balance per key; cost deducted after successful inference
+- USDC deposits on Base credited after on-chain confirmations
 - Dashboard at `apps/web` — keys, usage, billing, per-request logs, provider status
 
-## Phase 7 (current)
+### x402 pay-per-call (no API key required)
+- Dual path on `POST /v1/chat/completions`: Bearer key → balance, or anonymous USDC payment via x402 on Base
+- `GET /v1/pricing` / quote for per-model list prices
+- Coinbase CDP Facilitator verify + settle; payments persisted in `payment_events`
+- Discoverable on **x402 Bazaar / Agentic.Market** via automatic catalog indexing after mainnet settlement
 
-- Full dashboard at `apps/web` — overview, key management, usage charts, billing
-- `GET /v1/usage/history` for daily usage charts
-- Enriched `GET /v1/auth/keys` with balance and usage per key
+### Agent distribution
+- **MCP server** (`apps/mcp-server`) — hosted at `https://mcp.lmxcloud.io/mcp`, published to the official MCP Registry as [`io.lmxcloud/mcp-server`](https://registry.modelcontextprotocol.io)
+- Seven tools: `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion` (balance key **or** x402)
+- **ElizaOS plugin** — [`@lmxcloud/plugin-lmxcloud`](https://www.npmjs.com/package/@lmxcloud/plugin-lmxcloud) (separate repo: [LMXCloud/plugin-lmxcloud](https://github.com/LMXCloud/plugin-lmxcloud)); x402-only, no API key — wallet pays USDC per call on Base
 
-## Phase 6
-
-- Internal credit balance per API key (USD)
-- Cost deducted per inference from provider token rates
-- `GET /v1/balance`, optional `POST /v1/credits/topup` (dev)
-- Demo UI shows balance, cost, and low-balance warnings
-
-## Phase 5
-
-- Neon Postgres storage for API keys + usage (`DATABASE_URL`)
-- Key management — `GET /v1/auth/keys`, `DELETE /v1/auth/key`
-- Chat rate limiting per API key
-- `GET /v1/models` — models from healthy providers
-
-## Phase 4
-
-- Usage tracking per API key — `GET /v1/usage`
-- Demo UI shows cumulative key usage after inference
-
-## Phase 3
-
-- Multi-provider routing: io.net, AkashML (optional), Together.ai (optional)
-- Health monitor — polls providers every 30s
-- Routing strategies via `x-lmx-prefer`: `cheapest`, `fastest`, `depin-only`, `provider:ionet`
-- Automatic fallback chain on provider failure
-- `GET /v1/status` — live provider health and fallback chain
-
-## Phase 2
-
-- API key auth (`lmx_[32-char-hex]`) on inference endpoints
-- `POST /v1/auth/key` — generate a new API key
-
-## Phase 1
-
-- Fastify API server with `POST /v1/chat/completions`
-- io.net Intelligence provider adapter
-- OpenAI-compatible request/response format
+### Trust
+- Per-request receipts and batched Merkle anchoring (verifiable proofs via `GET /v1/usage/logs/:id/proof`)
 
 ## Prerequisites
 
@@ -93,6 +70,8 @@ Wallet auth and USDC deposits are configured in `apps/api/src/config.ts`. Set th
 
 Deposits activate only when `DATABASE_URL`, `BASE_RPC_URL`, and `TREASURY_ADDRESS` are all set. `CREDITS_ALLOW_SELF_TOPUP` must not be enabled in production.
 
+For x402 pay-per-call locally, also set `X402_ENABLED=true`, `CDP_API_KEY_ID`, `CDP_API_KEY_SECRET`, and treasury/chain vars. See `docs/x402-pricing.md`, `docs/x402-verification.md`, and [DEPLOY.md](./DEPLOY.md).
+
 ## Wallet auth and USDC funding (local)
 
 **Wallet sign-in (SIWE)** — alternative to Clerk email sign-in:
@@ -117,6 +96,23 @@ WALLET_PRIVATE_KEY=0x... API_URL=http://localhost:3000 node scripts/wallet-auth.
 For quick local testing without on-chain transfers, keep `CREDITS_ALLOW_SELF_TOPUP=true` and use `POST /v1/credits/topup` with `{ "amount": 10 }` — this bypasses the treasury entirely.
 
 See [http://localhost:5173/docs](http://localhost:5173/docs) for full request/response shapes.
+
+## x402 pay-per-call
+
+Agents with a funded Base wallet can call inference **without** an LMX API key. Omit `Authorization`, receive `402 Payment Required`, sign and attach an x402 payment payload, then retry — CDP verifies, LMX routes, then settles in USDC.
+
+```bash
+# Unpaid probe (expect 402)
+curl -i https://api.lmxcloud.io/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"llama-3-70b","messages":[{"role":"user","content":"hi"}]}'
+
+# Paid E2E (local / mainnet canary harness)
+pnpm --filter @lmxcloud/api test:x402 -- --pay
+pnpm --filter @lmxcloud/api test:x402:mainnet-canary
+```
+
+Pricing: `GET /v1/pricing`. The same route is indexed on Coinbase’s x402 Bazaar (Agentic.Market is the search UI over that index) after a real mainnet settlement.
 
 ## Demo UI
 
@@ -154,7 +150,11 @@ LMX ships a hosted MCP server so agents can discover pricing, check balance, and
 
 **Production:** `https://mcp.lmxcloud.io/mcp` (health: `/healthz`)
 
+**Registry:** [`io.lmxcloud/mcp-server`](https://registry.modelcontextprotocol.io) (streamable HTTP remote)
+
 **Tools (7):** `get_status`, `list_models`, `get_pricing`, `quote_price`, `get_balance`, `get_usage`, `chat_completion`
+
+`chat_completion` accepts an API key **or** x402 pay-per-call when no key is provided.
 
 **Client config** (`.cursor/mcp.json` in any repo):
 
@@ -188,9 +188,17 @@ HTTP mode endpoints (local):
 
 Production deploy instructions are in [DEPLOY.md](./DEPLOY.md) under the Railway MCP section.
 
+## ElizaOS plugin
+
+Separate package (not in this monorepo): [`@lmxcloud/plugin-lmxcloud`](https://www.npmjs.com/package/@lmxcloud/plugin-lmxcloud)
+
+- Registers `TEXT_SMALL` / `TEXT_LARGE` model handlers against `https://api.lmxcloud.io/v1/chat/completions`
+- Pays per call with x402 (`@x402/core` + `@x402/evm`) — one config value: an EVM private key funded with USDC on Base
+- Source: [github.com/LMXCloud/plugin-lmxcloud](https://github.com/LMXCloud/plugin-lmxcloud)
+
 ## Test
 
-**API docs:** [http://localhost:5173/docs](http://localhost:5173/docs) — overview, quickstart, wallet auth, USDC funding, routing, streaming, and roadmap.
+**API docs:** [http://localhost:5173/docs](http://localhost:5173/docs) — overview, quickstart, MCP, ElizaOS plugin, wallet auth, USDC funding, x402, routing, streaming, and roadmap.
 
 **Provider status:** [http://localhost:5173/status](http://localhost:5173/status) — live health from `GET /v1/status` (no auth).
 
@@ -232,12 +240,18 @@ Providers without API keys are skipped. When Tier 4 serves a request, `x-lmx-fal
 ## Project structure
 
 ```
-apps/api/src/     API server
-apps/demo/        Demo UI (Vite + React)
+apps/api/         Inference API (Fastify)
+apps/mcp-server/  Hosted MCP + x402 tools
 apps/web/         Dashboard (Vite + React)
-packages/shared/  OpenAI-compatible TypeScript types
+apps/demo/        Demo UI
+apps/ops/         Internal ops dashboard
+apps/cli/         CLI helpers
+packages/shared/  OpenAI-compatible types + model catalog
+packages/x402/    Shared CDP/x402 resource-server helpers
 data/             Local API key store (gitignored)
 ```
+
+Repos: [LMXCloud/LMXCloud.io](https://github.com/LMXCloud/LMXCloud.io) · [LMXCloud/plugin-lmxcloud](https://github.com/LMXCloud/plugin-lmxcloud)
 
 ## Supported models (aliases)
 

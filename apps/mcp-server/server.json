@@ -1,0 +1,13 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.lmxcloud/mcp-server",
+  "title": "LMX Cloud LLM Inference",
+  "description": "OpenAI-compatible LLM MCP (7 tools); chat via balance key or x402 USDC on Base",
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.lmxcloud.io/mcp"
+    }
+  ]
+}

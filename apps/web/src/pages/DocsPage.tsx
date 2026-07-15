@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: "overview", label: "Overview" },
   { id: "quickstart", label: "Quickstart" },
   { id: "mcp", label: "MCP" },
+  { id: "eliza", label: "ElizaOS plugin" },
   { id: "authentication", label: "Authentication" },
   { id: "wallet-auth", label: "Wallet authentication" },
   { id: "usdc-funding", label: "Funding with USDC" },
@@ -34,6 +35,7 @@ const SECTIONS = [
   { id: "routing", label: "Routing" },
   { id: "headers", label: "Response headers" },
   { id: "verifiable-logs", label: "Verifiable logs" },
+  { id: "pricing", label: "Pricing (x402)" },
   { id: "models", label: "Models" },
   { id: "roadmap", label: "Roadmap" },
   { id: "endpoints", label: "Public endpoints" },
@@ -75,14 +77,14 @@ export function DocsPage() {
     <PublicLayout>
       <SeoHead
         title="API Docs — LMX Cloud OpenAI-compatible inference"
-        description="Developer docs for LMX Cloud: OpenAI-compatible chat completions, API keys, wallet auth, streaming, DePIN routing, x402 USDC payments, MCP, and verifiable logs."
+        description="Developer docs for LMX Cloud: OpenAI-compatible chat completions, x402 USDC payments, MCP, ElizaOS plugin, wallet auth, DePIN routing, and verifiable logs."
         path="/docs"
       />
       <div className="mx-auto max-w-[1200px] px-[clamp(20px,4vw,48px)] py-10 sm:py-14">
         <PageHeader
           eyebrow="Developers"
           title="API documentation"
-          description="OpenAI-compatible inference routed through decentralized compute — evolving into Web3-native infrastructure for developers and autonomous agents."
+          description="OpenAI-compatible inference routed through decentralized compute — Web3-native rails for developers and autonomous agents."
           actions={
             <Button to="/sign-up" size="sm">
               Get API key
@@ -90,8 +92,8 @@ export function DocsPage() {
           }
         />
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[200px_1fr]">
-          <nav className="hidden lg:block">
+        <div className="mt-10 grid gap-10 lg:grid-cols-[220px_1fr]">
+          <nav className="hidden lg:sticky lg:top-24 lg:block lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto">
             <p className="text-label-sm text-on-surface-faint">On this page</p>
             <ul className="mt-3 space-y-1">
               {SECTIONS.map((section) => (
@@ -117,17 +119,31 @@ export function DocsPage() {
                 already use, backed by DePIN infrastructure instead of a single centralized vendor.
               </p>
               <p className="mt-4 text-body-md text-on-surface-muted">
-                The longer-term direction is Web3-native infrastructure: wallet-based identity
-                (Sign-In with Ethereum), on-chain stablecoin funding, and cryptographically
-                verifiable routing logs. The goal is not just a DePIN-backed API proxy, but real
-                infrastructure that both human developers and autonomous agents can authenticate to,
-                fund, and audit without a traditional account stack.
+                It is also built for agents with no prior relationship: omit an API key on{" "}
+                <code className="text-mono-sm">POST /v1/chat/completions</code>, pay per call in
+                USDC on Base via{" "}
+                <a
+                  href="https://www.x402.org/"
+                  className="text-primary hover:text-primary-hover"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  x402
+                </a>
+                , and get routed DePIN inference back. Discover the same surface through{" "}
+                <a href="#mcp" className="text-primary hover:text-primary-hover">
+                  MCP
+                </a>
+                , the{" "}
+                <a href="#eliza" className="text-primary hover:text-primary-hover">
+                  ElizaOS plugin
+                </a>
+                , or x402 Bazaar / Agentic.Market after a settled payment.
               </p>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                Today you can sign in with email (Clerk) or a wallet, pay for inference with USDC
-                on Base, route across multiple providers with transparent fallback, and independently
-                verify usage receipts anchored on Base. The sections below are the technical reference;
-                see{" "}
+                Developers can still sign in with email (Clerk) or a wallet, fund a balance with
+                USDC on Base, and verify usage receipts anchored on-chain. The sections below are the
+                technical reference; see{" "}
                 <a href="#roadmap" className="text-primary hover:text-primary-hover">
                   Roadmap
                 </a>{" "}
@@ -203,9 +219,20 @@ console.log(response.choices[0].message.content);`}
 
             <DocSection id="mcp" title="MCP (Model Context Protocol)">
               <p className="text-body-md text-on-surface-muted">
-                LMX Cloud ships an MCP server package (
-                <code className="text-mono-sm">@lmxcloud/mcp-server</code>) so agents can call
-                inference as tools instead of hand-writing REST calls.
+                LMX Cloud ships a hosted MCP server (
+                <code className="text-mono-sm">@lmxcloud/mcp-server</code>) at{" "}
+                <code className="text-mono-sm">{MCP_HOSTED_BASE}</code> so agents can call
+                inference as tools instead of hand-writing REST calls. It is published to the
+                official MCP Registry as{" "}
+                <a
+                  href="https://registry.modelcontextprotocol.io"
+                  className="text-primary hover:text-primary-hover"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <code className="text-mono-sm">io.lmxcloud/mcp-server</code>
+                </a>
+                .
               </p>
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 Current MCP tools:
@@ -238,7 +265,24 @@ console.log(response.choices[0].message.content);`}
                 </li>
                 <li>
                   <code className="text-mono-sm">chat_completion</code> — run inference (
-                  <code className="text-mono-sm">POST /v1/chat/completions</code>, key required)
+                  <code className="text-mono-sm">POST /v1/chat/completions</code>; API key or x402
+                  pay-per-call)
+                </li>
+              </ul>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Two payment paths</h3>
+              <ul className="mt-2 list-disc space-y-2 pl-5 text-body-sm text-on-surface-muted">
+                <li>
+                  Balance-funded — pass{" "}
+                  <code className="text-mono-sm">Authorization: Bearer lmx_...</code> (or an{" "}
+                  <code className="text-mono-sm">api_key</code> tool argument). Deducts from your
+                  console balance.
+                </li>
+                <li>
+                  x402 pay-per-call — omit the API key. The MCP seller wrapper returns payment
+                  requirements; your agent pays USDC on Base (same CDP facilitator +{" "}
+                  <code className="text-mono-sm">upto</code> scheme as the HTTP route). No LMX
+                  account required.
                 </li>
               </ul>
 
@@ -246,7 +290,9 @@ console.log(response.choices[0].message.content);`}
               <p className="mt-2 text-body-sm text-on-surface-muted">
                 Add this to <code className="text-mono-sm">.cursor/mcp.json</code> in any repository.
                 Your API key is sent per user via the <code className="text-mono-sm">Authorization</code>{" "}
-                header — each caller pays from their own balance.
+                header — each caller pays from their own balance. For x402-only agents, omit{" "}
+                <code className="text-mono-sm">headers</code> and use a client that can settle x402
+                tool payments.
               </p>
               <div className="mt-4">
                 <CodeBlock title=".cursor/mcp.json">
@@ -269,7 +315,7 @@ console.log(response.choices[0].message.content);`}
                 </Link>
                 , fund your balance, then call <code className="text-mono-sm">get_balance</code> and{" "}
                 <code className="text-mono-sm">chat_completion</code>. Missing or invalid keys return
-                clear MCP errors before inference is attempted.
+                clear MCP errors before inference is attempted (on the balance path).
               </p>
 
               <h3 className="mt-8 text-title-md text-on-surface">Local dev fallback</h3>
@@ -315,8 +361,150 @@ console.log(response.choices[0].message.content);`}
                 </CodeBlock>
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                A passing run confirms provider health, model discovery, quoting, balance checks,
-                inference billing, and usage accounting — all through MCP with your API key.
+                A passing balance-funded run confirms provider health, model discovery, quoting,
+                balance checks, inference billing, and usage accounting — all through MCP with your
+                API key. For x402, skip steps 4 and 6 (or expect auth errors) and invoke{" "}
+                <code className="text-mono-sm">chat_completion</code> with no key so payment settles
+                per call.
+              </p>
+            </DocSection>
+
+            <DocSection id="eliza" title="ElizaOS plugin">
+              <p className="text-body-md text-on-surface-muted">
+                Autonomously funded ElizaOS agents can use LMX Cloud as their LLM provider via{" "}
+                <a
+                  href="https://www.npmjs.com/package/@lmxcloud/plugin-lmxcloud"
+                  className="text-primary hover:text-primary-hover"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  <code className="text-mono-sm">@lmxcloud/plugin-lmxcloud</code>
+                </a>
+                . The plugin is x402-only: no LMX API key, no signup, and no pre-funded balance —
+                one EVM wallet funded with USDC on Base pays per call.
+              </p>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Source:{" "}
+                <a
+                  href="https://github.com/LMXCloud/plugin-lmxcloud"
+                  className="text-primary hover:text-primary-hover"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  github.com/LMXCloud/plugin-lmxcloud
+                </a>
+                . npm packages tagged <code className="text-mono-sm">elizaos</code> are
+                auto-discoverable; a third-party registry listing is also in review at{" "}
+                <a
+                  href="https://github.com/elizaOS/eliza/pull/16397"
+                  className="text-primary hover:text-primary-hover"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  elizaOS/eliza#16397
+                </a>
+                .
+              </p>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Install</h3>
+              <div className="mt-4">
+                <CodeBlock title="npm / elizaos CLI">
+                  {`npm install @lmxcloud/plugin-lmxcloud
+# or
+elizaos plugins add @lmxcloud/plugin-lmxcloud`}
+                </CodeBlock>
+              </div>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Required config</h3>
+              <p className="mt-2 text-body-sm text-on-surface-muted">
+                Set <code className="text-mono-sm">LMXCLOUD_PRIVATE_KEY</code> to an EVM private key
+                (<code className="text-mono-sm">0x…</code> or 64 hex chars) funded with USDC on Base
+                plus a little ETH for gas. On first payment the plugin may submit a one-time Permit2
+                USDC approval from that wallet.
+              </p>
+              <div className="mt-4">
+                <CodeBlock title="Character secrets">
+                  {`{
+  "name": "MyAgent",
+  "plugins": ["@lmxcloud/plugin-lmxcloud"],
+  "settings": {
+    "secrets": {
+      "LMXCLOUD_PRIVATE_KEY": "0xYOUR_PRIVATE_KEY"
+    }
+  }
+}`}
+                </CodeBlock>
+              </div>
+
+              <h3 className="mt-8 text-title-md text-on-surface">Optional settings</h3>
+              <div className="mt-4">
+                <DataTable minWidth={640}>
+                  <DataTableHead>
+                    <tr>
+                      <DataTableTh>Setting</DataTableTh>
+                      <DataTableTh>Default</DataTableTh>
+                      <DataTableTh>Description</DataTableTh>
+                    </tr>
+                  </DataTableHead>
+                  <DataTableBody>
+                    <DataTableRow>
+                      <DataTableCell mono>LMXCLOUD_API_URL</DataTableCell>
+                      <DataTableCell mono>https://api.lmxcloud.io</DataTableCell>
+                      <DataTableCell>API base URL</DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>LMXCLOUD_SMALL_MODEL</DataTableCell>
+                      <DataTableCell mono>glm-4.7-flash</DataTableCell>
+                      <DataTableCell>
+                        Model for <code className="text-mono-sm">TEXT_SMALL</code>
+                      </DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>LMXCLOUD_LARGE_MODEL</DataTableCell>
+                      <DataTableCell mono>llama-3-70b</DataTableCell>
+                      <DataTableCell>
+                        Model for <code className="text-mono-sm">TEXT_LARGE</code>
+                      </DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>LMXCLOUD_RPC_URL</DataTableCell>
+                      <DataTableCell mono>https://mainnet.base.org</DataTableCell>
+                      <DataTableCell>Base JSON-RPC for signing / Permit2</DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
+                      <DataTableCell mono>LMXCLOUD_CHAIN_ID</DataTableCell>
+                      <DataTableCell mono>8453</DataTableCell>
+                      <DataTableCell>
+                        <code className="text-mono-sm">8453</code> Base mainnet ·{" "}
+                        <code className="text-mono-sm">84532</code> Base Sepolia
+                      </DataTableCell>
+                    </DataTableRow>
+                  </DataTableBody>
+                </DataTable>
+              </div>
+
+              <h3 className="mt-8 text-title-md text-on-surface">How payment works</h3>
+              <ol className="mt-2 list-decimal space-y-1 pl-5 text-body-sm text-on-surface-muted">
+                <li>
+                  Plugin POSTs to{" "}
+                  <code className="text-mono-sm">{EXAMPLE_BASE}/v1/chat/completions</code> with no
+                  Bearer key.
+                </li>
+                <li>API returns HTTP 402 with x402 payment requirements (USDC on Base).</li>
+                <li>
+                  Plugin signs with <code className="text-mono-sm">@x402/core</code> +{" "}
+                  <code className="text-mono-sm">@x402/evm</code> (
+                  <code className="text-mono-sm">UptoEvmScheme</code>).
+                </li>
+                <li>Request is retried with the payment header; completion text is returned.</li>
+              </ol>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                Pricing is dynamic per request (x402 <code className="text-mono-sm">upto</code>{" "}
+                scheme). See{" "}
+                <a href="#pricing" className="text-primary hover:text-primary-hover">
+                  Pricing
+                </a>{" "}
+                for the public quote endpoint.
               </p>
             </DocSection>
 
@@ -832,17 +1020,33 @@ data: {
                 </CodeBlock>
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                Per-call x402 payment on <code className="text-mono-sm">POST /v1/chat/completions</code>{" "}
-                is live when <code className="text-mono-sm">X402_ENABLED=true</code>. Send a request
-                without <code className="text-mono-sm">Authorization</code> to receive HTTP 402 with
-                payment instructions, then retry with a <code className="text-mono-sm">PAYMENT-SIGNATURE</code>{" "}
-                header. API-key balance billing continues to work unchanged.
+                Per-call x402 payment on{" "}
+                <code className="text-mono-sm">POST /v1/chat/completions</code> is live on Base
+                mainnet. Send a request without <code className="text-mono-sm">Authorization</code>{" "}
+                to receive HTTP 402 with payment instructions, then retry with a{" "}
+                <code className="text-mono-sm">PAYMENT-SIGNATURE</code> header (CDP facilitator
+                verify + settle, <code className="text-mono-sm">upto</code> scheme). API-key
+                balance billing continues to work unchanged. Streaming is not supported on the
+                paid path yet (<code className="text-mono-sm">x402_stream_unsupported</code>).
               </p>
               <div className="mt-4">
                 <CodeBlock title="curl (x402 probe)">
                   {`# Expect 402 with payment instructions\ncurl -i -X POST ${EXAMPLE_BASE}/v1/chat/completions \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"llama-3-70b","messages":[{"role":"user","content":"hi"}]}'`}
                 </CodeBlock>
               </div>
+              <p className="mt-4 text-body-sm text-on-surface-muted">
+                After a real mainnet settlement, the route is indexed on Coinbase&apos;s x402 Bazaar
+                (Agentic.Market is the search UI over that index) — no separate signup form. The same
+                dual path (balance key or x402) is available through{" "}
+                <a href="#mcp" className="text-primary hover:text-primary-hover">
+                  MCP
+                </a>{" "}
+                and the{" "}
+                <a href="#eliza" className="text-primary hover:text-primary-hover">
+                  ElizaOS plugin
+                </a>
+                .
+              </p>
             </DocSection>
 
             <DocSection id="models" title="Models">
@@ -927,8 +1131,8 @@ data: {
 
             <DocSection id="roadmap" title="Roadmap">
               <p className="text-body-md text-on-surface-muted">
-                LMX Cloud is actively evolving from a DePIN inference router into Web3-native
-                infrastructure. Here is what you can build on today and what is coming next.
+                LMX Cloud is Web3-native infrastructure for developers and autonomous agents. Here is
+                what you can build on today and what is still in flight.
               </p>
 
               <h3 className="mt-8 text-title-md text-on-surface">Shipped</h3>
@@ -954,10 +1158,27 @@ data: {
                   confirmations, deposit history API.
                 </li>
                 <li>
+                  x402 pay-per-call — dual path on{" "}
+                  <code className="text-mono-sm">POST /v1/chat/completions</code> (Bearer balance
+                  or anonymous USDC), pricing at <code className="text-mono-sm">GET /v1/pricing</code>
+                  , and discovery on x402 Bazaar / Agentic.Market after mainnet settlement.
+                </li>
+                <li>
+                  MCP server — hosted at <code className="text-mono-sm">https://mcp.lmxcloud.io/mcp</code>
+                  , balance + x402 on <code className="text-mono-sm">chat_completion</code>, listed
+                  as <code className="text-mono-sm">io.lmxcloud/mcp-server</code> in the official MCP
+                  Registry.
+                </li>
+                <li>
+                  ElizaOS plugin —{" "}
+                  <code className="text-mono-sm">@lmxcloud/plugin-lmxcloud</code> on npm (wallet pays
+                  USDC per call; no API key). Community registry PR open for curated catalog listing.
+                </li>
+                <li>
                   Verifiable routing logs — <code className="text-mono-sm">lmx_receipt_v1</code>{" "}
-                  receipts, Merkle anchoring on Base via <code className="text-mono-sm">LmxLogAnchor</code>
-                  , proof API, public anchor status, and <code className="text-mono-sm">pnpm verify:receipt</code>{" "}
-                  CLI.
+                  receipts, Merkle anchoring on Base via{" "}
+                  <code className="text-mono-sm">LmxLogAnchor</code>, proof API, public anchor status,
+                  and <code className="text-mono-sm">pnpm verify:receipt</code> CLI.
                 </li>
                 <li>
                   Developer dashboard — key management, usage charts, per-request logs, billing, and
@@ -968,14 +1189,18 @@ data: {
               <h3 className="mt-8 text-title-md text-on-surface">Coming next</h3>
               <ul className="mt-2 list-disc space-y-2 pl-5 text-body-sm text-on-surface-muted">
                 <li>
-                  Agent-native payments (x402) — per-request USDC payment on{" "}
-                  <code className="text-mono-sm">POST /v1/chat/completions</code> when{" "}
-                  <code className="text-mono-sm">X402_ENABLED=true</code>; pricing catalog at{" "}
-                  <code className="text-mono-sm">GET /v1/pricing</code>.
+                  x402 streaming — paid path currently returns{" "}
+                  <code className="text-mono-sm">x402_stream_unsupported</code>; balance-funded
+                  streaming remains available.
                 </li>
                 <li>
-                  Distribution — x402 Bazaar and Agentic.Market listing, MCP server, and ElizaOS
-                  plugin so agents can find LMX Cloud through standard discovery channels.
+                  ElizaOS end-to-end agent walkthrough — npm package is live; formal agent soak +
+                  registry merge still in progress.
+                </li>
+                <li>
+                  Ops polish — public abuse/load hardening validation on anonymous x402, mainnet
+                  log-anchor deploy, and optional push alerts for first-traffic-from-new-wallet
+                  events.
                 </li>
                 <li>
                   Trust and legal —{" "}
@@ -990,13 +1215,14 @@ data: {
                   <Link to="/legal/acceptable-use" className="text-primary hover:text-primary-hover">
                     Acceptable Use
                   </Link>{" "}
-                  (beta drafts — attorney review before public listings).
+                  (beta drafts — attorney review still recommended for larger exposure).
                 </li>
               </ul>
               <p className="mt-4 text-body-sm text-on-surface-muted">
                 If you are evaluating whether to build on LMX Cloud: inference, routing, wallet
-                identity, USDC funding, and verifiable logs are live today on Base. Agent-native
-                per-call payments are the next layer for autonomous discovery and consumption.
+                identity, USDC funding, verifiable logs, x402 pay-per-call, MCP, and the ElizaOS
+                plugin are live today. Phase 1 distribution channels are findable; next work is
+                reliability, trust, and traffic — not the payment plumbing itself.
               </p>
             </DocSection>
 

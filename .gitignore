@@ -4,6 +4,7 @@ dist/
 .env
 .env.local
 .env.mainnet
+key.pem
 data/
 contracts/out/
 *.log

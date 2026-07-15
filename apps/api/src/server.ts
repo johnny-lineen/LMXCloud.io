@@ -24,6 +24,7 @@ import { registerUsageRoutes } from "./routes/usage.js";
 import { registerBalanceRoutes } from "./routes/balance.js";
 import { registerPaymentRoutes } from "./routes/payments.js";
 import { registerPricingRoutes } from "./routes/pricing.js";
+import { registerOpsRoutes } from "./routes/ops.js";
 import { createPaymentStore } from "./payments/store.js";
 import { registerX402ChatPayments } from "./payments/x402-server.js";
 import type { Network } from "@x402/core/types";
@@ -343,7 +344,13 @@ export async function buildServer() {
       config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
   });
 
-
+  await registerOpsRoutes(app, {
+    providers,
+    healthStore,
+    x402Enabled:
+      config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
+    paymentStoreReady: Boolean(paymentStore),
+  });
 
   return { app, config };
 

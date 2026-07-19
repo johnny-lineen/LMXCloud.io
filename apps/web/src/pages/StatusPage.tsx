@@ -6,6 +6,7 @@ import {
   fetchStatus,
   fetchStatusHistory,
   type StatusHistoryResponse,
+  type StatusHistorySignalStats,
   type StatusResponse,
 } from "../api";
 import { PublicLayout } from "../components/PublicLayout";
@@ -46,16 +47,20 @@ function txUrl(chainId: number, txHash: string): string {
   return `${base}${txHash}`;
 }
 
-function summarizeHistory(history: StatusHistoryResponse) {
-  const checks = history.by_provider.reduce((sum, row) => sum + row.checks, 0);
-  const healthy = history.by_provider.reduce((sum, row) => sum + row.healthy_checks, 0);
-  const latencyRows = history.by_provider.filter((row) => row.avg_latency_ms != null);
+function summarizeSignal(
+  rows: Array<{ provider: string; signal: StatusHistorySignalStats }>,
+) {
+  const checks = rows.reduce((sum, row) => sum + row.signal.checks, 0);
+  const healthy = rows.reduce((sum, row) => sum + row.signal.healthy_checks, 0);
+  const latencyRows = rows.filter((row) => row.signal.avg_latency_ms != null);
   const avgLatency =
     latencyRows.length === 0
       ? null
       : Math.round(
-          latencyRows.reduce((sum, row) => sum + (row.avg_latency_ms ?? 0), 0) /
-            latencyRows.length,
+          latencyRows.reduce(
+            (sum, row) => sum + (row.signal.avg_latency_ms ?? 0),
+            0,
+          ) / latencyRows.length,
         );
   return {
     checks,
@@ -63,6 +68,87 @@ function summarizeHistory(history: StatusHistoryResponse) {
     uptime: checks === 0 ? 0 : Math.round((healthy / checks) * 10_000) / 10_000,
     avgLatency,
   };
+}
+
+function SignalTable({
+  title,
+  description,
+  summary,
+  rows,
+}: {
+  title: string;
+  description: string;
+  summary: ReturnType<typeof summarizeSignal>;
+  rows: Array<{ provider: string; signal: StatusHistorySignalStats }>;
+}) {
+  return (
+    <div className="mt-8 first:mt-4">
+      <p className="text-body-sm font-medium text-on-surface">{title}</p>
+      <p className="mt-1 text-body-sm text-on-surface-muted">
+        {description}{" "}
+        {summary.checks > 0 ? (
+          <>
+            {(summary.uptime * 100).toFixed(1)}% across{" "}
+            {summary.checks.toLocaleString()} samples
+            {summary.avgLatency != null
+              ? ` · ${formatLatency(summary.avgLatency)} avg`
+              : ""}
+            .
+          </>
+        ) : (
+          <>No samples in this window yet.</>
+        )}
+      </p>
+      <div className="mt-4">
+        <DataTable title={title} minWidth={640}>
+          <DataTableHead>
+            <tr>
+              <DataTableTh>Provider</DataTableTh>
+              <DataTableTh>Uptime</DataTableTh>
+              <DataTableTh>Samples</DataTableTh>
+              <DataTableTh>Avg latency</DataTableTh>
+              <DataTableTh>p50</DataTableTh>
+              <DataTableTh>p95</DataTableTh>
+            </tr>
+          </DataTableHead>
+          <DataTableBody>
+            {rows.length === 0 ? (
+              <DataTableEmpty colSpan={6}>No providers configured.</DataTableEmpty>
+            ) : (
+              rows.map(({ provider, signal }) => (
+                <DataTableRow key={provider}>
+                  <DataTableCell className="font-medium">{provider}</DataTableCell>
+                  <DataTableCell>
+                    {signal.checks > 0 ? `${(signal.uptime * 100).toFixed(1)}%` : "—"}
+                  </DataTableCell>
+                  <DataTableCell>
+                    {signal.checks > 0
+                      ? `${signal.healthy_checks}/${signal.checks}`
+                      : "0"}
+                  </DataTableCell>
+                  <DataTableCell>
+                    {signal.avg_latency_ms != null
+                      ? formatLatency(signal.avg_latency_ms)
+                      : "—"}
+                  </DataTableCell>
+                  <DataTableCell>
+                    {signal.p50_latency_ms != null
+                      ? formatLatency(signal.p50_latency_ms)
+                      : "—"}
+                  </DataTableCell>
+                  <DataTableCell>
+                    {signal.p95_latency_ms != null
+                      ? formatLatency(signal.p95_latency_ms)
+                      : "—"}
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
+    </div>
+  );
 }
 
 export function StatusPage() {
@@ -76,12 +162,21 @@ export function StatusPage() {
   const load = useCallback(async (isManual = false) => {
     if (isManual) setRefreshing(true);
     try {
-      const [statusData, historyData] = await Promise.all([
+      const [statusResult, historyResult] = await Promise.allSettled([
         fetchStatus(),
         fetchStatusHistory(HISTORY_DAYS),
       ]);
-      setStatus(statusData);
-      setHistory(historyData);
+
+      if (statusResult.status === "rejected") {
+        throw statusResult.reason instanceof Error
+          ? statusResult.reason
+          : new Error("Failed to load status");
+      }
+
+      setStatus(statusResult.value);
+      if (historyResult.status === "fulfilled") {
+        setHistory(historyResult.value);
+      }
       setError(null);
       setLastUpdated(new Date());
     } catch (err) {
@@ -104,7 +199,22 @@ export function StatusPage() {
   const healthyCount = providers.filter(([, p]) => p.healthy).length;
   const allHealthy = providers.length > 0 && healthyCount === providers.length;
   const noneHealthy = providers.length > 0 && healthyCount === 0;
-  const historySummary = history ? summarizeHistory(history) : null;
+
+  const gatewayRows =
+    history?.by_provider.map((row) => ({
+      provider: row.provider,
+      signal: row.gateway,
+    })) ?? [];
+  const syntheticRows =
+    history?.by_provider.map((row) => ({
+      provider: row.provider,
+      signal: row.synthetic_completion,
+    })) ?? [];
+  const trafficRows =
+    history?.by_provider.map((row) => ({
+      provider: row.provider,
+      signal: row.real_traffic,
+    })) ?? [];
 
   return (
     <PublicLayout>
@@ -207,74 +317,35 @@ export function StatusPage() {
           <Card className="mt-6">
             <div className="flex flex-wrap items-center gap-2">
               <Activity className="h-4 w-4 text-primary" strokeWidth={1.75} />
-              <p className="text-body-sm font-medium text-on-surface">Uptime record</p>
+              <p className="text-body-sm font-medium text-on-surface">
+                Reliability signals
+              </p>
               <span className="text-body-sm text-on-surface-faint">
                 · last {history.window_days}d
               </span>
             </div>
             <p className="mt-3 text-body-sm text-on-surface-muted">
-              Measured from health polls every 30 seconds (persisted).{" "}
-              {historySummary && historySummary.checks > 0 ? (
-                <>
-                  {(historySummary.uptime * 100).toFixed(1)}% uptime across{" "}
-                  {historySummary.checks.toLocaleString()} checks
-                  {historySummary.avgLatency != null
-                    ? ` · ${formatLatency(historySummary.avgLatency)} avg latency`
-                    : ""}
-                  .
-                </>
-              ) : (
-                <>Waiting for the first persisted health checks…</>
-              )}
+              Three independent signals — not blended. Gateway is reachability;
+              synthetic is a real completion probe; real traffic is customer usage.
             </p>
-            <div className="mt-6">
-              <DataTable title="Per-provider uptime" minWidth={640}>
-                <DataTableHead>
-                  <tr>
-                    <DataTableTh>Provider</DataTableTh>
-                    <DataTableTh>Uptime</DataTableTh>
-                    <DataTableTh>Checks</DataTableTh>
-                    <DataTableTh>Avg latency</DataTableTh>
-                    <DataTableTh>p50</DataTableTh>
-                    <DataTableTh>p95</DataTableTh>
-                  </tr>
-                </DataTableHead>
-                <DataTableBody>
-                  {history.by_provider.length === 0 ? (
-                    <DataTableEmpty colSpan={6}>No providers configured.</DataTableEmpty>
-                  ) : (
-                    history.by_provider.map((row) => (
-                      <DataTableRow key={row.provider}>
-                        <DataTableCell className="font-medium">{row.provider}</DataTableCell>
-                        <DataTableCell>
-                          {row.checks > 0 ? `${(row.uptime * 100).toFixed(1)}%` : "—"}
-                        </DataTableCell>
-                        <DataTableCell>
-                          {row.checks > 0
-                            ? `${row.healthy_checks}/${row.checks}`
-                            : "0"}
-                        </DataTableCell>
-                        <DataTableCell>
-                          {row.avg_latency_ms != null
-                            ? formatLatency(row.avg_latency_ms)
-                            : "—"}
-                        </DataTableCell>
-                        <DataTableCell>
-                          {row.p50_latency_ms != null
-                            ? formatLatency(row.p50_latency_ms)
-                            : "—"}
-                        </DataTableCell>
-                        <DataTableCell>
-                          {row.p95_latency_ms != null
-                            ? formatLatency(row.p95_latency_ms)
-                            : "—"}
-                        </DataTableCell>
-                      </DataTableRow>
-                    ))
-                  )}
-                </DataTableBody>
-              </DataTable>
-            </div>
+            <SignalTable
+              title="Gateway ping"
+              description="GET /models every ~30s (persisted)."
+              summary={summarizeSignal(gatewayRows)}
+              rows={gatewayRows}
+            />
+            <SignalTable
+              title="Synthetic completion"
+              description="Minimal chatCompletion via the real adapter path (~every 3 min)."
+              summary={summarizeSignal(syntheticRows)}
+              rows={syntheticRows}
+            />
+            <SignalTable
+              title="Real traffic"
+              description="Customer chat usage outcomes (from usage events, not re-polled)."
+              summary={summarizeSignal(trafficRows)}
+              rows={trafficRows}
+            />
           </Card>
         )}
 

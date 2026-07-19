@@ -146,6 +146,11 @@ const MIGRATIONS = [
     ON provider_health_checks (provider, checked_at DESC)`,
   `CREATE INDEX IF NOT EXISTS idx_provider_health_checks_checked
     ON provider_health_checks (checked_at)`,
+  // Distinguish gateway ping vs synthetic completion (real_traffic is merged at query time)
+  `ALTER TABLE provider_health_checks
+    ADD COLUMN IF NOT EXISTS check_type TEXT NOT NULL DEFAULT 'gateway'`,
+  `CREATE INDEX IF NOT EXISTS idx_provider_health_checks_provider_type_checked
+    ON provider_health_checks (provider, check_type, checked_at DESC)`,
 ];
 
 export async function runMigrations(): Promise<void> {

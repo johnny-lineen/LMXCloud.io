@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import type { AnchorStore } from "../anchors/store.js";
-import { getProviderHealthHistory } from "../health/queries.js";
+import {
+  getProviderHealthHistory,
+  type ProviderHealthSignalStats,
+} from "../health/queries.js";
 import { getReliabilityTelemetry } from "../ops/queries.js";
 import { getFallbackChain } from "../providers/registry.js";
 import type { ProviderAdapter } from "../providers/types.js";
@@ -20,6 +23,28 @@ function parseDays(raw: unknown, fallback: number): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.min(Math.floor(n), 90));
+}
+
+function emptySignalJson() {
+  return {
+    checks: 0,
+    healthy_checks: 0,
+    uptime: 0,
+    avg_latency_ms: null as number | null,
+    p50_latency_ms: null as number | null,
+    p95_latency_ms: null as number | null,
+  };
+}
+
+function signalJson(stats: ProviderHealthSignalStats) {
+  return {
+    checks: stats.checks,
+    healthy_checks: stats.healthyChecks,
+    uptime: stats.uptime,
+    avg_latency_ms: stats.avgLatencyMs,
+    p50_latency_ms: stats.p50LatencyMs,
+    p95_latency_ms: stats.p95LatencyMs,
+  };
 }
 
 export async function registerStatusRoutes(
@@ -107,8 +132,10 @@ export async function registerStatusRoutes(
   });
 
   /**
-   * Historical health-poll uptime / latency (survives restarts).
-   * Distinct from `reliability` on /v1/status, which is derived from usage events.
+   * Three-tier provider reliability (not blended):
+   * - gateway: /models reachability polls
+   * - synthetic_completion: real chatCompletion probes
+   * - real_traffic: customer usage_events (merged at read time)
    * Query: ?days=1|7|30 (default 30, max 90).
    */
   app.get<{ Querystring: { days?: string } }>("/v1/status/history", async (request) => {
@@ -123,12 +150,11 @@ export async function registerStatusRoutes(
         const row = byName.get(provider.name);
         return {
           provider: provider.name,
-          checks: row?.checks ?? 0,
-          healthy_checks: row?.healthyChecks ?? 0,
-          uptime: row?.uptime ?? 0,
-          avg_latency_ms: row?.avgLatencyMs ?? null,
-          p50_latency_ms: row?.p50LatencyMs ?? null,
-          p95_latency_ms: row?.p95LatencyMs ?? null,
+          gateway: row ? signalJson(row.gateway) : emptySignalJson(),
+          synthetic_completion: row
+            ? signalJson(row.syntheticCompletion)
+            : emptySignalJson(),
+          real_traffic: row ? signalJson(row.realTraffic) : emptySignalJson(),
         };
       }),
     };

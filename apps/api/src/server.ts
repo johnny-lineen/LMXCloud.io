@@ -120,6 +120,7 @@ export async function buildServer() {
     healthStore,
     config.healthPollIntervalMs,
     healthHistoryStore,
+    config.healthSyntheticIntervalMs,
   );
 
   const apiKeyStore = await createApiKeyStore();

@@ -46,6 +46,9 @@ export interface Config {
 
   healthPollIntervalMs: number;
 
+  /** Synthetic chatCompletion probe interval; null disables. Floor enforced in loadConfig. */
+  healthSyntheticIntervalMs: number | null;
+
   ionet: ProviderConfig;
 
   akash?: ProviderConfig;
@@ -155,6 +158,27 @@ function parsePositiveInt(
     throw new Error(`${name} must be a positive integer`);
   }
   return value;
+}
+
+/** Default 3 min; hard floor 60s so a mis-set env can't hammer providers. */
+const HEALTH_SYNTHETIC_DEFAULT_MS = 180_000;
+const HEALTH_SYNTHETIC_MIN_MS = 60_000;
+
+function parseHealthSyntheticIntervalMs(
+  raw: string | undefined,
+): number | null {
+  if (raw === "0" || raw?.toLowerCase() === "off" || raw?.toLowerCase() === "false") {
+    return null;
+  }
+  if (raw === undefined) return HEALTH_SYNTHETIC_DEFAULT_MS;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(
+      "HEALTH_SYNTHETIC_INTERVAL_MS must be a non-negative number (0/off to disable)",
+    );
+  }
+  if (value === 0) return null;
+  return Math.max(HEALTH_SYNTHETIC_MIN_MS, Math.floor(value));
 }
 
 
@@ -445,6 +469,9 @@ export function loadConfig(): Config {
     port: Number(process.env.PORT ?? 3000),
     host: process.env.HOST ?? "0.0.0.0",
     healthPollIntervalMs: Number(process.env.HEALTH_POLL_INTERVAL_MS ?? 30_000),
+    healthSyntheticIntervalMs: parseHealthSyntheticIntervalMs(
+      process.env.HEALTH_SYNTHETIC_INTERVAL_MS,
+    ),
     ionet: {
       apiKey: requireEnv("IONET_API_KEY"),
       baseUrl: process.env.IONET_BASE_URL ?? "https://api.intelligence.io.solutions/api/v1",

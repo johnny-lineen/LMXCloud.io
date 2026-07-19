@@ -402,14 +402,20 @@ export interface StatusResponse {
   reliability?: StatusReliabilityInfo;
 }
 
-export interface StatusHistoryProviderRow {
-  provider: string;
+export interface StatusHistorySignalStats {
   checks: number;
   healthy_checks: number;
   uptime: number;
   avg_latency_ms: number | null;
   p50_latency_ms: number | null;
   p95_latency_ms: number | null;
+}
+
+export interface StatusHistoryProviderRow {
+  provider: string;
+  gateway: StatusHistorySignalStats;
+  synthetic_completion: StatusHistorySignalStats;
+  real_traffic: StatusHistorySignalStats;
 }
 
 export interface StatusHistoryResponse {

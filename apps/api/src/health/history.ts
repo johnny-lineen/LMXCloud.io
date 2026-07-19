@@ -1,7 +1,11 @@
 import { getPool } from "../db/pool.js";
 
+/** Poll-persisted signal types. real_traffic is merged from usage_events at query time. */
+export type HealthCheckType = "gateway" | "synthetic_completion";
+
 export interface ProviderHealthCheckRecord {
   provider: string;
+  checkType: HealthCheckType;
   healthy: boolean;
   latencyMs: number | null;
   checkedAt?: Date;
@@ -31,9 +35,16 @@ export function createProviderHealthHistoryStore(
       const checkedAt = check.checkedAt ?? new Date();
       void getPool()
         .query(
-          `INSERT INTO provider_health_checks (provider, healthy, latency_ms, checked_at)
-           VALUES ($1, $2, $3, $4)`,
-          [check.provider, check.healthy, check.latencyMs, checkedAt],
+          `INSERT INTO provider_health_checks
+             (provider, check_type, healthy, latency_ms, checked_at)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            check.provider,
+            check.checkType,
+            check.healthy,
+            check.latencyMs,
+            checkedAt,
+          ],
         )
         .catch((err) => {
           onError?.(err);

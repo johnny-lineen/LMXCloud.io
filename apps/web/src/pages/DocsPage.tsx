@@ -116,7 +116,7 @@ export function DocsPage() {
             <DocSection id="overview" title="What is LMX Cloud?">
               <p className="text-body-md text-on-surface-muted">
                 LMX Cloud is an OpenAI-compatible inference API that routes your requests through
-                decentralized compute networks — primarily io.net and Akash — with automatic
+                decentralized compute networks — io.net, AkashML, and Aethir Mesh — with automatic
                 fallback when a provider is slow or unavailable. Drop in your existing SDK, change
                 the base URL and API key, and you get the same chat completions interface you
                 already use (including vision{" "}
@@ -934,6 +934,10 @@ data: {
                       <DataTableCell>Try named provider first, then fallback chain</DataTableCell>
                     </DataTableRow>
                     <DataTableRow>
+                      <DataTableCell mono>provider:aethir</DataTableCell>
+                      <DataTableCell>Try Aethir Mesh first, then fallback chain</DataTableCell>
+                    </DataTableRow>
+                    <DataTableRow>
                       <DataTableCell mono>(omit)</DataTableCell>
                       <DataTableCell>Default tier order with health-aware prioritization</DataTableCell>
                     </DataTableRow>
@@ -1213,7 +1217,7 @@ data: {
                       <DataTableTh>Upstream ID</DataTableTh>
                       <DataTableTh>io.net</DataTableTh>
                       <DataTableTh>AkashML</DataTableTh>
-                      <DataTableTh>Nosana</DataTableTh>
+                      <DataTableTh>Aethir Mesh</DataTableTh>
                     </tr>
                   </DataTableHead>
                   <DataTableBody>
@@ -1228,7 +1232,7 @@ data: {
                           {model.providers.includes("akash") ? "✓" : "—"}
                         </DataTableCell>
                         <DataTableCell>
-                          {model.providers.includes("nosana") ? "✓" : "—"}
+                          {model.providers.includes("aethir") ? "✓" : "—"}
                         </DataTableCell>
                       </DataTableRow>
                     ))}
@@ -1236,11 +1240,12 @@ data: {
                 </DataTable>
               </div>
               <p className="mt-4 text-body-sm text-on-surface-muted">
-                Overlap varies by network: several aliases span io.net + AkashML + Nosana; others
-                are single-network. Nosana activates when{" "}
-                <code className="font-mono text-on-surface">NOSANA_API_KEY</code> and{" "}
-                <code className="font-mono text-on-surface">NOSANA_ENDPOINTS</code> (per-model
-                deployment URLs) are set. See the{" "}
+                Overlap varies by network: several aliases span io.net + AkashML + Aethir Mesh;
+                others are single-network. Aethir Mesh activates when{" "}
+                <code className="font-mono text-on-surface">AETHIR_API_KEY</code> is set (optional{" "}
+                <code className="font-mono text-on-surface">AETHIR_BASE_URL</code>, default{" "}
+                <code className="font-mono text-on-surface">https://mesh-api.aethir.com/v1</code>
+                ). See the{" "}
                 <Link to="/#models" className="text-primary hover:text-primary-hover">
                   landing page
                 </Link>{" "}
@@ -1267,8 +1272,9 @@ data: {
                   balance billing.
                 </li>
                 <li>
-                  Multi-provider routing — io.net and Akash with health-aware fallback; routing
-                  preferences via <code className="text-mono-sm">x-lmx-prefer</code>.
+                  Multi-provider routing — io.net, AkashML, and Aethir Mesh with health-aware
+                  fallback; routing preferences via{" "}
+                  <code className="text-mono-sm">x-lmx-prefer</code>.
                 </li>
                 <li>
                   Transparent fallback — response headers and stream metadata show which provider
@@ -1319,8 +1325,8 @@ data: {
                   anonymous pay-per-call for search is deferred.
                 </li>
                 <li>
-                  Embeddings and image generation — parked until io.net/Akash (or a new provider)
-                  expose live SKUs; catalogs checked 2026-07-18.
+                  Embeddings and image generation — parked until a configured provider ships
+                  embedding/image SKUs (io.net, AkashML, and Aethir Mesh are chat-only today).
                 </li>
                 <li>
                   x402 streaming — paid path currently returns{" "}

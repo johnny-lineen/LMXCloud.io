@@ -1,4 +1,8 @@
-export type DepinProvider = "ionet" | "akash" | "nosana";
+export type DepinProvider = "ionet" | "akash" | "aethir" | "nosana";
+
+/** Stable display order for DePIN networks in marketing / docs tables. */
+/** Public/marketing order for wired DePIN gateways (excludes inert adapters). */
+export const DEPIN_PROVIDER_ORDER: DepinProvider[] = ["ionet", "akash", "aethir"];
 
 export type ModelCategory =
   | "meta"
@@ -33,6 +37,8 @@ export interface SupportedModel {
 
 /**
  * Verified via chat completions against io.net + AkashML catalogs (2026-07).
+ * Aethir Mesh overlap verified live GET /v1/models (2026-07-21); mesh uses
+ * short lowercase IDs (e.g. minimax-m2.5), mapped in apps/api AETHIR_MODEL_MAP.
  * Nosana overlap confirmed against official vLLM/LMDeploy/Ollama templates
  * (nosana-ci/pipeline-templates, 2026-07): Llama 70B family, DeepSeek-R1,
  * Qwen 3.5/3.6, GLM 4.7 Flash, GPT-OSS, Gemma 4 26B. Nosana has no shared
@@ -73,7 +79,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "qwen-3.6-35b",
     label: "Qwen 3.6 35B",
     upstreamId: "Qwen/Qwen3.6-35B-A3B",
-    providers: ["ionet", "akash", "nosana"],
+    providers: ["ionet", "akash", "aethir", "nosana"],
     category: "qwen",
     inputModalities: ["text", "image"],
   },
@@ -89,7 +95,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "qwen-3.6-27b",
     label: "Qwen 3.6 27B",
     upstreamId: "Qwen/Qwen3.6-27B",
-    providers: ["ionet", "nosana"],
+    providers: ["ionet", "aethir", "nosana"],
     category: "qwen",
   },
   {
@@ -110,21 +116,21 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "deepseek-v4-flash",
     label: "DeepSeek V4 Flash",
     upstreamId: "deepseek-ai/DeepSeek-V4-Flash",
-    providers: ["ionet", "akash"],
+    providers: ["ionet", "akash", "aethir"],
     category: "deepseek",
   },
   {
     alias: "deepseek-v4-pro",
     label: "DeepSeek V4 Pro",
     upstreamId: "deepseek-ai/DeepSeek-V4-Pro",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "deepseek",
   },
   {
     alias: "deepseek-v3.2",
     label: "DeepSeek V3.2",
     upstreamId: "deepseek-ai/DeepSeek-V3.2",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "deepseek",
   },
   {
@@ -145,14 +151,14 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "glm-5.1",
     label: "GLM 5.1",
     upstreamId: "zai-org/GLM-5.1",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "glm",
   },
   {
     alias: "glm-5",
     label: "GLM 5",
     upstreamId: "zai-org/GLM-5",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "glm",
   },
   {
@@ -194,14 +200,14 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "kimi-k2.5",
     label: "Kimi K2.5",
     upstreamId: "moonshotai/Kimi-K2.5",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "kimi",
   },
   {
     alias: "kimi-k2.6",
     label: "Kimi K2.6",
     upstreamId: "moonshotai/Kimi-K2.6",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "kimi",
   },
   {
@@ -250,7 +256,7 @@ export const SUPPORTED_MODELS: SupportedModel[] = [
     alias: "minimax-m2.5",
     label: "MiniMax M2.5",
     upstreamId: "MiniMaxAI/MiniMax-M2.5",
-    providers: ["ionet"],
+    providers: ["ionet", "aethir"],
     category: "minimax",
   },
 ];
@@ -286,17 +292,19 @@ export const MODEL_CATEGORIES: Record<ModelCategory, string> = {
   other: "Other",
 };
 
-const PROVIDER_LABELS: Record<DepinProvider, string> = {
+export const PROVIDER_LABELS: Record<DepinProvider, string> = {
   ionet: "io.net",
   akash: "AkashML",
+  aethir: "Aethir Mesh",
   nosana: "Nosana",
 };
 
 export function formatModelProviders(model: SupportedModel): string {
-  if (model.providers.length === 1) {
-    return `${PROVIDER_LABELS[model.providers[0]!]} only`;
+  const providers = DEPIN_PROVIDER_ORDER.filter((p) => model.providers.includes(p));
+  if (providers.length === 1) {
+    return `${PROVIDER_LABELS[providers[0]!]} only`;
   }
-  return model.providers.map((p) => PROVIDER_LABELS[p]).join(" + ");
+  return providers.map((p) => PROVIDER_LABELS[p]).join(" + ");
 }
 
 /** Unique aliases (drops duplicate upstream rows like llama-3-70b / llama-3.3-70b). */

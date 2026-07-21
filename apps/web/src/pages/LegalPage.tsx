@@ -154,7 +154,8 @@ function TermsContent() {
       </LegalSection>
       <LegalSection title="Inference and third-party providers">
         <p>
-          Requests are routed to third-party compute networks (e.g., io.net, Akash). We do not
+          Requests are routed to third-party compute networks (e.g., io.net, AkashML, Aethir Mesh).
+          We do not
           guarantee output quality, latency, or availability. Review model outputs before
           relying on them.
         </p>

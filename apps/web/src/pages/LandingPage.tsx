@@ -1,8 +1,11 @@
 import { SignedIn, SignedOut } from "@clerk/clerk-react";
 import {
   DEFAULT_MODEL_ALIAS,
+  DEPIN_PROVIDER_ORDER,
+  formatModelProviders,
   listUniqueModelAliases,
   MODEL_CATEGORIES,
+  PROVIDER_LABELS,
   type ModelCategory,
   type SupportedModel,
 } from "@lmxcloud/shared";
@@ -12,9 +15,11 @@ import {
   Code2,
   FileCheck,
   Layers,
+  Package,
   Plug,
   Route,
   Shield,
+  Store,
   Wallet,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -28,6 +33,19 @@ import { formatHeroSavings, getHeroSavingsHint } from "../lib/openai-benchmark";
 import { DEFAULT_DESCRIPTION, DEFAULT_TITLE } from "../lib/seo";
 
 const SUPPORTED_MODEL_LIST = listUniqueModelAliases();
+
+const ACTIVE_DEPIN_PROVIDERS = DEPIN_PROVIDER_ORDER.filter((provider) =>
+  SUPPORTED_MODEL_LIST.some((model) => model.providers.includes(provider)),
+);
+
+const ROUTING_NETWORKS = ACTIVE_DEPIN_PROVIDERS.map((provider) => PROVIDER_LABELS[provider]);
+
+const ROUTING_NETWORKS_PHRASE =
+  ROUTING_NETWORKS.length <= 1
+    ? ROUTING_NETWORKS[0] ?? "DePIN networks"
+    : `${ROUTING_NETWORKS.slice(0, -1).join(", ")}, and ${ROUTING_NETWORKS.at(-1)}`;
+
+const ROUTING_NETWORKS_HINT = `${ROUTING_NETWORKS.join(" + ")} · auto-failover`;
 
 const MODELS_BY_CATEGORY = SUPPORTED_MODEL_LIST.reduce<
   Partial<Record<ModelCategory, SupportedModel[]>>
@@ -60,9 +78,9 @@ const HERO_STATS = [
   },
   {
     label: "DePIN routing",
-    value: "2",
+    value: String(ROUTING_NETWORKS.length),
     unit: "networks",
-    hint: "io.net + Akash · auto-failover",
+    hint: ROUTING_NETWORKS_HINT,
     tone: "info" as const,
   },
   {
@@ -84,9 +102,9 @@ const FEATURES = [
   },
   {
     icon: Route,
-    title: "DePIN routing",
+    title: "Neutral multi-network routing",
     description:
-      "Route by cost, latency, or DePIN-only across io.net and Akash. Automatic failover when a provider goes dark.",
+      `Not a single-network wrapper. Route by cost, latency, or DePIN-only across ${ROUTING_NETWORKS.join(", ")} — with measured reliability and automatic failover when a provider goes dark.`,
     accent: "info" as const,
   },
   {
@@ -134,6 +152,27 @@ const AUDIENCES = [
   },
 ];
 
+const AGENT_CHANNELS = [
+  {
+    icon: Store,
+    title: "x402 Bazaar",
+    body: "Discoverable on Coinbase's x402 Bazaar — Agentic.Market is the search UI over that index. Agents find and pay for inference after a settled call.",
+    cta: { label: "x402 pricing", to: "/docs#pricing" as const },
+  },
+  {
+    icon: Plug,
+    title: "MCP server",
+    body: "Hosted at mcp.lmxcloud.io with balance or x402 on chat completion. Listed in the official MCP Registry as io.lmxcloud/mcp-server.",
+    cta: { label: "MCP quickstart", to: "/docs#mcp" as const },
+  },
+  {
+    icon: Package,
+    title: "ElizaOS plugin",
+    body: "@lmxcloud/plugin-lmxcloud on npm. Wallet pays USDC per call — no API key, no signup, no pre-funded balance.",
+    cta: { label: "ElizaOS docs", to: "/docs#eliza" as const },
+  },
+];
+
 const STEPS = [
   {
     step: "01",
@@ -148,7 +187,7 @@ const STEPS = [
   {
     step: "03",
     title: "Get routed inference",
-    body: "OpenAI-compatible chat completions across io.net and Akash, with streaming, transparent fallback, and verifiable receipts on every call.",
+    body: `OpenAI-compatible chat completions across ${ROUTING_NETWORKS_PHRASE}, with streaming, transparent fallback, and verifiable receipts on every call.`,
   },
 ];
 
@@ -268,10 +307,11 @@ export function LandingPage() {
                   <span className="text-primary">autonomous agents</span>
                 </p>
                 <p className="mt-6 max-w-lg text-body-md text-on-surface-muted">
-                  LMX Cloud routes chat completions across io.net and Akash with automatic fallback.
-                  Human developers get a dashboard, wallet auth, and USDC funding. Agents pay per
-                  call via x402 — no signup, no API key. Drop in your OpenAI SDK or try the live
-                  demo below.
+                  A neutral multi-network router — not a single DePIN wrapper. Chat completions
+                  failover across providers with measured reliability, not asserted uptime from one
+                  network. Human developers get a dashboard, wallet auth, and USDC funding. Agents
+                  pay per call via x402 — no signup, no API key. Drop in your OpenAI SDK or try the
+                  live demo below.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-3">
                   <Button to="/sign-up" size="lg">
@@ -295,8 +335,11 @@ export function LandingPage() {
                 <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-label-sm text-on-surface-faint">Routed via</span>
-                    <Chip tone="default">io.net</Chip>
-                    <Chip tone="default">AkashML</Chip>
+                    {ROUTING_NETWORKS.map((network) => (
+                      <Chip key={network} tone="default">
+                        {network}
+                      </Chip>
+                    ))}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-label-sm text-on-surface-faint">Payments</span>
@@ -349,13 +392,21 @@ export function LandingPage() {
                 <AudienceCard key={audience.title} {...audience} />
               ))}
             </div>
-            <p className="mt-8 max-w-3xl text-body-sm text-on-surface-muted">
-              <span className="text-label-sm text-on-surface-faint">Coming soon — Phase 1 distribution</span>
-              <span className="mt-2 block">
-                Listings on x402 Bazaar, Agentic.Market, an MCP server, and an ElizaOS plugin — so
-                agents can discover and pay for inference without a manual integration.
-              </span>
-            </p>
+            <div className="mt-14">
+              <p className="text-label-sm text-primary">Agent distribution</p>
+              <h3 className="mt-2 text-headline-md text-on-surface">
+                Discoverable where agents already look
+              </h3>
+              <p className="mt-3 max-w-2xl text-body-md text-on-surface-muted">
+                x402 Bazaar, MCP, and ElizaOS are live — agents can find and pay for routed inference
+                without a manual integration.
+              </p>
+              <div className="mt-8 grid gap-4 md:grid-cols-3">
+                {AGENT_CHANNELS.map((channel) => (
+                  <AudienceCard key={channel.title} {...channel} />
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -367,7 +418,7 @@ export function LandingPage() {
                 <SectionHeader
                   eyebrow="Model catalog"
                   title={`${SUPPORTED_MODEL_LIST.length} models on DePIN`}
-                  description={`Default ${DEFAULT_MODEL_ALIAS}. Short aliases route across io.net and AkashML with automatic failover.`}
+                  description={`Default ${DEFAULT_MODEL_ALIAS}. Short aliases route across ${ROUTING_NETWORKS_PHRASE} with automatic failover.`}
                 />
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -681,7 +732,7 @@ function ModelCategoryBlock({
         {models.map((model) => (
           <span
             key={model.alias}
-            title={`${model.label} · ${model.providers.map((p) => (p === "ionet" ? "io.net" : p === "akash" ? "AkashML" : "Nosana")).join(" + ")}`}
+            title={`${model.label} · ${formatModelProviders(model)}`}
             className="rounded border border-border bg-background px-2 py-0.5 text-mono-sm text-on-surface-muted"
           >
             {model.alias}

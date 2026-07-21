@@ -43,6 +43,7 @@ export function savingsVsOpenAi(lmxCost: number, openAiCost: number): number {
 /** LMX provider rates ($/1k total tokens) — keep in sync with apps/api/src/providers/*.ts */
 export const LMX_PROVIDER_RATES = {
   akash: 0.0001,
+  aethir: 0.0001,
   ionet: 0.0002,
   together: 0.0004,
 } as const;

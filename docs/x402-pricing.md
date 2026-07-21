@@ -23,11 +23,11 @@ margin            = 25% (configurable via X402_PRICING_MARGIN_PCT)
 
 Provider floors today:
 
-| Provider | Cost / 1k tokens | List / 1k (25% margin) |
-|----------|------------------|--------------------------|
-| AkashML  | $0.0001          | $0.000125                |
-| Nosana   | $0.00015         | $0.0001875               |
-| io.net   | $0.0002          | $0.000250                |
+| Provider    | Cost / 1k tokens | List / 1k (25% margin) |
+|-------------|------------------|--------------------------|
+| AkashML     | $0.0001          | $0.000125                |
+| Aethir Mesh | $0.0001          | $0.000125                |
+| io.net      | $0.0002          | $0.000250                |
 
 For each model alias, the catalog picks the **cheapest configured provider** that supports the alias (same rule as `GET /v1/models`).
 

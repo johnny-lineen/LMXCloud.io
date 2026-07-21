@@ -1,6 +1,6 @@
 # LMX Cloud — OpenAI-Compatible Inference for Agents
 
-OpenAI-compatible inference API that routes requests through decentralized compute (io.net, Akash) with automatic provider fallback. Built for developers **and** autonomous agents: wallet identity (SIWE), USDC funding on Base, x402 pay-per-call settlement, MCP tools, and verifiable routing logs.
+OpenAI-compatible inference API that routes requests through decentralized compute (io.net, AkashML, Aethir Mesh) with automatic provider fallback. Built for developers **and** autonomous agents: wallet identity (SIWE), USDC funding on Base, x402 pay-per-call settlement, MCP tools, and verifiable routing logs.
 
 **Live:** [lmxcloud.io](https://lmxcloud.io) · API `https://api.lmxcloud.io` · MCP `https://mcp.lmxcloud.io/mcp`
 
@@ -38,7 +38,7 @@ OpenAI-compatible inference API that routes requests through decentralized compu
 - Node.js 20+
 - pnpm
 - io.net API key from [ai.io.net](https://ai.io.net/ai/api-keys)
-- Optional: [AkashML](https://akashml.com), [Nosana](https://deploy.nosana.com) (`NOSANA_API_KEY` + per-model `NOSANA_ENDPOINTS`), and [Together.ai](https://api.together.xyz) keys for fallback tiers
+- Optional: [AkashML](https://akashml.com), [Aethir Mesh](https://mesh.aethir.com), and [Together.ai](https://api.together.xyz) keys for fallback tiers
 - Optional: [Brave Search API](https://brave.com/search/api/) key (`BRAVE_SEARCH_API_KEY`) to enable `web_search` / `POST /v1/web/search`
 
 ## Setup
@@ -263,14 +263,14 @@ Authenticated endpoints (usage, balance, keys) use the same `Authorization: Bear
 
 ## Fallback chain
 
-| Tier | Provider   | Type        | Required key     |
-|------|------------|-------------|------------------|
-| 1    | io.net     | DePIN       | `IONET_API_KEY`  |
-| 2    | AkashML    | DePIN       | `AKASHML_API_KEY`|
-| 3    | Nosana     | DePIN       | `NOSANA_API_KEY` + `NOSANA_ENDPOINTS` |
-| 4    | Together   | Centralized | `TOGETHER_API_KEY`|
+| Tier | Provider    | Type        | Required key     |
+|------|-------------|-------------|------------------|
+| 1    | io.net      | DePIN       | `IONET_API_KEY`  |
+| 2    | AkashML     | DePIN       | `AKASHML_API_KEY`|
+| 2    | Aethir Mesh | DePIN       | `AETHIR_API_KEY` |
+| 4    | Together    | Centralized | `TOGETHER_API_KEY`|
 
-Providers without API keys are skipped. Nosana is **per-deployment** (no shared gateway): `NOSANA_ENDPOINTS` is a JSON map of LMX alias → `https://<job-id>.node.k8s.prd.nos.ci/v1` (optional `{ baseUrl, upstreamId }` when the served model name differs). When Tier 4 serves a request, `x-lmx-fallback` and `x-lmx-provider` reflect it — no silent centralization.
+Providers without API keys are skipped. When Together serves a request, `x-lmx-fallback` and `x-lmx-provider` reflect it — no silent centralization.
 
 ## Project structure
 
@@ -290,20 +290,22 @@ Repos: [LMXCloud/LMXCloud.io](https://github.com/LMXCloud/LMXCloud.io) · [LMXCl
 
 ## Supported models (aliases)
 
-LMX exposes **30 short aliases** mapped to io.net, AkashML, and Nosana upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live chat completions.
+LMX exposes **30 short aliases** mapped to io.net, AkashML, and Aethir Mesh upstream IDs. The catalog lives in `packages/shared/src/models.ts` and is verified with live provider catalogs.
 
 `GET /v1/models` returns aliases from **healthy** providers only. The router skips providers that do not support the requested alias.
 
-| LMX alias | Upstream ID | io.net | AkashML | Nosana | Notes |
+| LMX alias | Upstream ID | io.net | AkashML | Aethir | Notes |
 |-----------|-------------|:------:|:-------:|:------:|-------|
-| `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct` | ✓ | ✓ | ✓ | |
-| `llama-3.3-70b` | same | ✓ | ✓ | ✓ | |
+| `llama-3-70b` | `meta-llama/Llama-3.3-70B-Instruct` | ✓ | ✓ | | |
+| `llama-3.3-70b` | same | ✓ | ✓ | | |
 | `qwen-3.6-35b` | `Qwen/Qwen3.6-35B-A3B` | ✓ | ✓ | ✓ | vision |
-| `deepseek-v4-flash` | `deepseek-ai/DeepSeek-V4-Flash` | ✓ | ✓ | | |
+| `deepseek-v4-flash` | `deepseek-ai/DeepSeek-V4-Flash` | ✓ | ✓ | ✓ | |
+| `deepseek-v4-pro` | `deepseek-ai/DeepSeek-V4-Pro` | ✓ | | ✓ | |
 | `glm-5.2` | `zai-org/GLM-5.2` | ✓ | ✓ | | |
-| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ | ✓ | vision |
+| `glm-5.1` | `zai-org/GLM-5.1` | ✓ | | ✓ | |
+| `qwen-3.5-35b` | `Qwen/Qwen3.5-35B-A3B` | | ✓ | | vision |
 | `llama-3.2-90b-vision` | `meta-llama/Llama-3.2-90B-Vision-Instruct` | ✓ | | | vision |
-| `deepseek-r1` | `deepseek-ai/DeepSeek-R1-0528` | ✓ | | ✓ | |
-| `gpt-oss-120b` | `openai/gpt-oss-120b` | ✓ | | ✓ | |
+| `deepseek-r1` | `deepseek-ai/DeepSeek-R1-0528` | ✓ | | | |
+| `gpt-oss-120b` | `openai/gpt-oss-120b` | ✓ | | | |
 
-Plus other io.net / Nosana overlaps (`qwen-3.6-27b`, `glm-4.7-flash`, `gpt-oss-20b`, `gemma-4-26b`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400.
+Plus other io.net / Aethir overlaps (`qwen-3.6-27b`, `deepseek-v3.2`, `glm-5`, `kimi-k2.5`, `minimax-m2.5`, …). See the [landing page models section](http://localhost:5173/#models) or `packages/shared/src/models.ts` for the full list. Vision-capable aliases accept OpenAI-style `image_url` content parts; text-only models reject image content with HTTP 400.

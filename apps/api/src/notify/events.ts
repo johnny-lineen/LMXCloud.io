@@ -63,6 +63,40 @@ export function notifyCreditsAdded(input: {
  * Notify on the first successful API request per key (in-process dedupe + DB check).
  * Ongoing traffic is not notified — avoids chat spam at scale.
  */
+/** Fires when a provider's gateway health flips (down or recovered). Deduped in HealthMonitor. */
+export function notifyProviderHealthChange(input: {
+  provider: string;
+  healthy: boolean;
+  latencyMs: number | null;
+  healthyCount: number;
+  providerCount: number;
+}): void {
+  const lines: string[] = [];
+
+  if (!input.healthy && input.healthyCount === 0) {
+    lines.push("🚨 All providers down");
+  } else if (input.healthy) {
+    lines.push("✅ Provider recovered");
+  } else {
+    lines.push("🔴 Provider unhealthy");
+  }
+
+  lines.push(`Provider: ${input.provider}`);
+  if (input.latencyMs != null) {
+    lines.push(`Latency: ${input.latencyMs}ms`);
+  }
+  lines.push(
+    `Routing: ${input.healthyCount}/${input.providerCount} providers healthy`,
+  );
+  if (!input.healthy && input.healthyCount > 0) {
+    lines.push("Fallback: traffic will use remaining healthy providers");
+  } else if (!input.healthy) {
+    lines.push("Impact: inference requests will 5xx until a provider recovers");
+  }
+
+  notifyTelegram(lines.join("\n"));
+}
+
 export function notifyFirstApiUsage(
   usageStore: UsageStore,
   input: {

@@ -1,3 +1,4 @@
+import { notifyProviderHealthChange } from "../notify/events.js";
 import type { ProviderAdapter } from "../providers/types.js";
 import type { ProviderHealthHistoryStore } from "./history.js";
 import type { HealthStore } from "./store.js";
@@ -14,6 +15,8 @@ export class HealthMonitor {
   private syntheticTimer: ReturnType<typeof setInterval> | null = null;
   private lastPruneAt = 0;
   private syntheticInFlight = false;
+  /** Last healthy state we Telegram-notified (undefined = not yet observed). */
+  private readonly lastNotifiedHealthy = new Map<string, boolean>();
 
   constructor(
     private readonly providers: ProviderAdapter[],
@@ -66,10 +69,46 @@ export class HealthMonitor {
           latencyMs: result.latencyMs,
           checkedAt: new Date(checkedAt),
         });
+        return { provider: provider.name, result };
       }),
-    );
+    ).then((rows) => {
+      for (const { provider, result } of rows) {
+        this.maybeNotifyHealthChange(provider, result.healthy, result.latencyMs);
+      }
+    });
 
     this.maybePrune();
+  }
+
+  /**
+   * Telegram on gateway health transitions only (not every failed poll).
+   * Skips the initial "healthy" observation on cold start to avoid noise.
+   */
+  private maybeNotifyHealthChange(
+    provider: string,
+    healthy: boolean,
+    latencyMs: number | null,
+  ): void {
+    const prev = this.lastNotifiedHealthy.get(provider);
+    if (prev === healthy) return;
+
+    if (prev === undefined && healthy) {
+      this.lastNotifiedHealthy.set(provider, true);
+      return;
+    }
+
+    this.lastNotifiedHealthy.set(provider, healthy);
+
+    const statuses = this.store.getAll();
+    const healthyCount = Object.values(statuses).filter((s) => s.healthy).length;
+
+    notifyProviderHealthChange({
+      provider,
+      healthy,
+      latencyMs,
+      healthyCount,
+      providerCount: this.providers.length,
+    });
   }
 
   /**

@@ -8,6 +8,7 @@ export {
   notifyAccountCreated,
   notifyCreditsAdded,
   notifyFirstApiUsage,
+  notifyProviderHealthChange,
   type AccountCreatedSource,
   type CreditSource,
 } from "./events.js";

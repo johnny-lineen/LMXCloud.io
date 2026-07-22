@@ -3,6 +3,12 @@ export function formatUsd(n: number): string {
   return `$${n.toFixed(6)}`;
 }
 
+export function formatEth(n: number): string {
+  if (n >= 0.01) return `${n.toFixed(4)} ETH`;
+  if (n >= 0.0001) return `${n.toFixed(6)} ETH`;
+  return `${n.toExponential(2)} ETH`;
+}
+
 export function formatNum(n: number): string {
   return n.toLocaleString();
 }

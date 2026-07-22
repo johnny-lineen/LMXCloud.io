@@ -229,6 +229,29 @@ export type StuckPayment = OpsPaymentRecord & {
   ageMinutes: number;
 };
 
+export type OpsTreasury =
+  | {
+      status: "ready";
+      address: string;
+      chainId: number;
+      chainLabel: string;
+      usdcBalance: number;
+      ethBalance: number;
+      fetchedAt: string;
+      explorerUrl: string;
+    }
+  | {
+      status: "unconfigured";
+      reason: string;
+    }
+  | {
+      status: "error";
+      address: string;
+      chainId: number;
+      chainLabel: string;
+      reason: string;
+    };
+
 export type OpsOverview = {
   object: "ops_overview";
   generatedAt: string;
@@ -322,4 +345,5 @@ export type OpsOverview = {
   };
   irregularities: OpsIrregularity[];
   activity: OpsActivityItem[];
+  treasury: OpsTreasury;
 };

@@ -21,6 +21,7 @@ import {
 } from "./DetailPages";
 import {
   formatLatency,
+  formatEth,
   formatNum,
   formatTime,
   formatTokens,
@@ -34,6 +35,7 @@ import type {
   OpsIrregularityDiagnostic,
   OpsIrregularityRecord,
   OpsOverview,
+  OpsTreasury,
 } from "./types";
 import {
   HealthFields,
@@ -315,6 +317,87 @@ function Stat({
         <div className="mt-0.5 text-xs text-[var(--color-muted)]">{hint}</div>
       ) : null}
     </div>
+  );
+}
+
+function TreasuryPanel({ treasury }: { treasury: OpsTreasury }) {
+  if (treasury.status === "unconfigured") {
+    return (
+      <Panel title="Treasury wallet" subtitle="On-chain fee receiver">
+        <p className="text-sm text-[var(--color-muted)]">{treasury.reason}</p>
+      </Panel>
+    );
+  }
+
+  if (treasury.status === "error") {
+    return (
+      <Panel
+        title="Treasury wallet"
+        subtitle={`${treasury.chainLabel} · ${shortWallet(treasury.address)}`}
+      >
+        <p className="text-sm text-[var(--color-danger)]">{treasury.reason}</p>
+        <p className="mt-2 font-mono text-[11px] text-[var(--color-faint)]">
+          {treasury.address}
+        </p>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel
+      title="Treasury wallet"
+      subtitle={`${treasury.chainLabel} · receives x402 fees and USDC deposits`}
+      action={
+        <a
+          href={treasury.explorerUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="font-mono text-[10px] text-[var(--color-accent)] underline-offset-2 hover:underline"
+        >
+          explorer
+        </a>
+      }
+    >
+      <dl className="space-y-3">
+        <div>
+          <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
+            USDC balance
+          </dt>
+          <dd className="mt-1 font-mono text-2xl font-medium tabular-nums text-[var(--color-ink)]">
+            {formatUsd(treasury.usdcBalance)}
+          </dd>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
+              ETH (gas)
+            </dt>
+            <dd className="mt-1 font-mono text-sm tabular-nums text-[var(--color-ink)]">
+              {formatEth(treasury.ethBalance)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
+              Chain
+            </dt>
+            <dd className="mt-1 font-mono text-sm text-[var(--color-ink)]">
+              {treasury.chainLabel} ({treasury.chainId})
+            </dd>
+          </div>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-[0.12em] text-[var(--color-faint)]">
+            Address
+          </dt>
+          <dd className="mt-1 break-all font-mono text-[11px] text-[var(--color-muted)]">
+            {treasury.address}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-3 font-mono text-[10px] text-[var(--color-faint)]">
+        fetched {formatTime(treasury.fetchedAt)}
+      </p>
+    </Panel>
   );
 }
 
@@ -658,9 +741,25 @@ function OverviewPage({
                 .map(([k, v]) => `${k}:${v}`)
                 .join(" ") || "none"}
             />
+            <Stat
+              label="Treasury"
+              value={
+                data.treasury?.status === "ready"
+                  ? formatUsd(data.treasury.usdcBalance)
+                  : "—"
+              }
+              hint={
+                data.treasury?.status === "ready"
+                  ? `${data.treasury.chainLabel} USDC`
+                  : data.treasury?.status === "error"
+                    ? "balance error"
+                    : "not configured"
+              }
+            />
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            {data.treasury ? <TreasuryPanel treasury={data.treasury} /> : null}
             <Panel
               title="Provider health"
               subtitle={`Fallback: ${data.server.fallbackChain.join(" → ") || "—"}`}

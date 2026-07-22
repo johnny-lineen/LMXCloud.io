@@ -360,12 +360,43 @@ export async function buildServer() {
       config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
   });
 
+  const treasuryOpsConfig =
+    config.deposits ??
+    (process.env.BASE_RPC_URL && process.env.TREASURY_ADDRESS
+      ? {
+          rpcUrl: process.env.BASE_RPC_URL,
+          treasuryAddress: getAddress(process.env.TREASURY_ADDRESS),
+          usdcContractAddress: getAddress(
+            process.env.USDC_CONTRACT_ADDRESS ??
+              (config.siwe.chainId === 84532
+                ? "0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+                : "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"),
+          ),
+          chainId: config.siwe.chainId,
+          chainLabel: config.siwe.chainId === 84532 ? "base-sepolia" : "base",
+          confirmations: 0,
+          pollIntervalMs: 0,
+          lookbackBlocks: 0,
+          maxLogBlockRange: 0,
+          maxDepositUsdc: 0,
+        }
+      : undefined);
+
   await registerOpsRoutes(app, {
     providers,
     healthStore,
     x402Enabled:
       config.x402.enabled && Boolean(config.x402.payToAddress && paymentStore),
     paymentStoreReady: Boolean(paymentStore),
+    treasury: treasuryOpsConfig
+      ? {
+          rpcUrl: treasuryOpsConfig.rpcUrl,
+          treasuryAddress: treasuryOpsConfig.treasuryAddress,
+          usdcContractAddress: treasuryOpsConfig.usdcContractAddress,
+          chainId: treasuryOpsConfig.chainId,
+          chainLabel: treasuryOpsConfig.chainLabel,
+        }
+      : undefined,
   });
 
   return { app, config };

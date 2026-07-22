@@ -13,6 +13,10 @@ import {
 import { detectIrregularities } from "../ops/irregularities.js";
 import { enrichIrregularities } from "../ops/diagnostics.js";
 import {
+  getTreasurySnapshot,
+  type TreasuryOpsConfig,
+} from "../ops/treasury.js";
+import {
   getPaymentById,
   getReliabilityTelemetry,
   getUsageById,
@@ -32,6 +36,7 @@ interface OpsRouteDeps {
   healthStore: HealthStore;
   x402Enabled: boolean;
   paymentStoreReady: boolean;
+  treasury?: TreasuryOpsConfig;
 }
 
 function parseLimit(raw: unknown, fallback: number): number {
@@ -228,6 +233,7 @@ export async function registerOpsRoutes(
       }
 
       const mcpEvents = listRecentMcpToolEvents(limit);
+      const treasury = await getTreasurySnapshot(deps.treasury);
 
       type ActivityItem =
         | {
@@ -450,6 +456,7 @@ export async function registerOpsRoutes(
         attention,
         irregularities,
         activity,
+        treasury,
       };
     });
   });
